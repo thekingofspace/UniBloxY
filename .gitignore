@@ -1,0 +1,38 @@
+# Unity generated folders
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+UserSettings/
+
+# Visual Studio / Rider / VSCode
+.vscode/
+.vs/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Unity cache / artifacts
+MemoryCaptures/
+Recordings/
+
+# Addressables / AssetBundles (generated)
+ServerData/
+
+# Ignore crash logs
+sysinfo.txt
+
+# Your specific entries
+Packages/packages-lock.json
