@@ -4,10 +4,10 @@
 ---@field Connected boolean
 ---@field Disconnect fun(self:SignalConnection)
 
----@class Signal
----@field Connect fun(self:Signal, callback:fun(...:any)):SignalConnection
----@field Once fun(self:Signal, callback:fun(...:any)):SignalConnection
----@field Wait fun(self:Signal):...
+---@class Signal<T...>
+---@field Connect fun(self: Signal<T...>, callback: fun(...: T...)): SignalConnection
+---@field Once fun(self: Signal<T...>, callback: fun(...: T...)): SignalConnection
+---@field Wait fun(self: Signal<T...>): T...
 local Signal = {}
 
 return Signal

@@ -1,5 +1,19 @@
 {
   "diagnostics.disable": [
     "await-in-sync"
-  ]
+  ],
+  "workspace": {
+    "library": [
+      "Assets/Resources/LuaScripts"
+    ]
+  },
+  "runtime": {
+    "version": "Lua 5.4",
+    "path": [
+      "?.lua",
+      "?/init.lua",
+      "Assets/Resources/LuaScripts/?.lua",
+      "Assets/Resources/LuaScripts/?/init.lua"
+    ]
+  }
 }

@@ -124,13 +124,33 @@ public class Signal
     public Table BuildTable()
     {
         var t = new Table(script);
-        t["Connect"] = (System.Func<DynValue, Closure, DynValue>)((_, cb) => Connect(cb));
-        t["Once"] = (System.Func<DynValue, Closure, DynValue>)((_, cb) => Once(cb));
-        t["_addWaiter"] = (System.Action<DynValue, DynValue>)((_, th) => AddWaiter(th));
+
+        t["Connect"] = DynValue.NewCallback((ctx, args) =>
+        {
+            var self = args[0];
+            var cb = args[1].Function;
+            return Connect(cb);
+        });
+
+        t["Once"] = DynValue.NewCallback((ctx, args) =>
+        {
+            var self = args[0];
+            var cb = args[1].Function;
+            return Once(cb);
+        });
+
+        t["_addWaiter"] = DynValue.NewCallback((ctx, args) =>
+        {
+            var self = args[0];
+            var th = args[1];
+            AddWaiter(th);
+            return DynValue.Nil;
+        });
 
         var chunk = script.LoadString(
             "return function(self) self:_addWaiter(coroutine.running()) return coroutine.yield() end",
             null, $"{label}.Wait");
+
         t["Wait"] = script.Call(chunk);
 
         return t;
