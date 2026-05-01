@@ -72,7 +72,7 @@ function task.wait(seconds)
     return clock - start
 end
 
-Unity.BindToHeartbeat(0, "_task_scheduler", function(dt)
+RunService.Heartbeat:Connect(function(dt)
     clock = clock + dt
     local pending = waiting
     waiting = {}
