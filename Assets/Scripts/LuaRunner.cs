@@ -7,6 +7,7 @@ public class LuaRunner : MonoBehaviour
 {
     public static LuaRunner Instance { get; private set; }
     public Script Lua { get; private set; }
+    public LuaInstance Game { get; private set; }
 
     private readonly Dictionary<string, DynValue> loadedModules = new();
 
@@ -35,7 +36,50 @@ public class LuaRunner : MonoBehaviour
 
         Lua.Globals["require"] = (System.Func<string, DynValue>)Require;
 
+        Lua.Globals["typeof"] = new CallbackFunction((ctx, args) =>
+        {
+            var val = args.Count > 0 ? args[0] : DynValue.Nil;
+            switch (val.Type)
+            {
+                case DataType.Nil:       return DynValue.NewString("nil");
+                case DataType.Boolean:   return DynValue.NewString("boolean");
+                case DataType.Number:    return DynValue.NewString("number");
+                case DataType.String:    return DynValue.NewString("string");
+                case DataType.Function:
+                case DataType.ClrFunction: return DynValue.NewString("function");
+                case DataType.Thread:    return DynValue.NewString("thread");
+                case DataType.Table:
+                    var mt = val.Table.MetaTable;
+                    if (mt != null)
+                    {
+                        var typeVal = mt.RawGet("__type");
+                        if (typeVal.Type == DataType.String)
+                            return typeVal;
+                        if (typeVal.Type == DataType.Function || typeVal.Type == DataType.ClrFunction)
+                            return ctx.GetScript().Call(typeVal, val);
+                    }
+                    return DynValue.NewString("table");
+                case DataType.UserData:
+                    if (val.UserData?.Object != null)
+                    {
+                        var prop = val.UserData.Object.GetType().GetProperty("ClassName");
+                        if (prop != null)
+                        {
+                            var cn = prop.GetValue(val.UserData.Object) as string;
+                            if (cn != null) return DynValue.NewString(cn);
+                        }
+                    }
+                    return DynValue.NewString("userdata");
+                default:
+                    return DynValue.NewString(val.Type.ToString().ToLower());
+            }
+        });
+
         LuaTypes.Register(Lua);
+        LuaInstance.EnsureRegistered(Lua);
+
+        Game = new LuaInstance(Lua, "DataModel", "game");
+        Lua.Globals["game"] = Game.Table;
 
         RegisterServices();
 
@@ -56,6 +100,10 @@ public class LuaRunner : MonoBehaviour
         catch (ScriptRuntimeException ex)
         {
             Debug.LogError($"Lua error: {ex.DecoratedMessage}");
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Lua host error: {ex}");
         }
     }
 

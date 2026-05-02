@@ -30,6 +30,21 @@ task.delay(2, function()
     print("Ran")
 end)
 
-task.wait(2)
+print(typeof(RunService.Heartbeat))
+print(typeof(task))
 
-RunService.Close()
+local Test = Instance.New("Folder")
+
+Test.Changed:Connect(function(property)
+    print(property)
+end)
+
+Test.Parent = game
+
+Test:GetPropertyChangedSignal("Name"):Connect(function()
+    print("Updated")
+end)
+
+Test.Name = "grag"
+
+print(game:GetChildren())

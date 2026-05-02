@@ -1,6 +1,8 @@
 ---@meta
 
 ---@class LuaInputObject
+---@field ClassName "InputObject"
+---@field Device string
 ---@field KeyCode string
 ---@field KeyCodeId integer
 
@@ -9,15 +11,15 @@
 
 
 ---@class Mouse
----@field Clicked Signal<string>
----@field Moved Signal<Vector2, LuaVector2>
----@field ButtonDown Signal<MouseButtonName>
----@field ButtonUp Signal<MouseButtonName>
+---@field Clicked Signal<fun(input:string)>
+---@field Moved Signal<fun(Position:Vector2, Position:Vector2)>
+---@field ButtonDown Signal<fun(MouseButton:MouseButtonName)>
+---@field ButtonUp Signal<fun(MouseButton:MouseButtonName)>
 ---@field IsButtonDown fun(self:Mouse, name:MouseButtonName):boolean
 ---@field Position Vector2
 
 ---@class InputService
----@field Input Signal<LuaInputObject, InputState>
+---@field Input Signal<fun(Input:LuaInputObject, State:InputState)>
 ---@field IsKeyDown fun(key:string|integer):boolean
 ---@field GetMouse fun():Mouse
 InputService = {}

@@ -80,6 +80,10 @@ public class RunService : LuaService
         table["Close"] = (Action)Close;
         table["BindToClose"] = (Func<DynValue, DynValue>)BindToClose;
 
+        var mt = new Table(script);
+        mt["__type"] = "RunService";
+        table.MetaTable = mt;
+
         return table;
     }
 }

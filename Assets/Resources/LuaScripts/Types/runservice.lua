@@ -1,7 +1,7 @@
 ---@meta
 
 ---@class RunService
----@field Heartbeat Signal<number>
+---@field Heartbeat Signal<fun(dt:number)>
 ---@field GetEnvironment fun():"InStudio"|"Deployed"
 ---@field Close fun()
 ---@field BindToClose fun(callback:fun()):fun()

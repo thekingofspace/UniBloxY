@@ -8,6 +8,7 @@ public class LuaInputObject
     public string Device { get; }
     public string KeyCode { get; }
     public int KeyCodeId { get; }
+    public string ClassName => "InputObject";
 
     public LuaInputObject(string device, string keyCode, int keyCodeId)
     {
@@ -154,6 +155,10 @@ public class TextInputService : LuaService
         t["Input"] = input.BuildTable();
         t["IsKeyDown"] = (System.Func<DynValue, bool>)IsKeyDown;
         t["GetMouse"] = (System.Func<Table>)(() => mouse.GetTable());
+
+        var mt = new Table(script);
+        mt["__type"] = "InputService";
+        t.MetaTable = mt;
 
         return t;
     }

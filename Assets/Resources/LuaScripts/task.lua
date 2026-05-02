@@ -93,4 +93,9 @@ RunService.Heartbeat:Connect(function(dt)
     end
 end)
 
+task.__index = task
+task.__type = "task"
+
+task = setmetatable({}, task)
+
 return task

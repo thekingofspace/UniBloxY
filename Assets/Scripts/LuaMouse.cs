@@ -45,6 +45,7 @@ public class LuaMouse
                 return UserData.Create(GetPosition());
             return DynValue.Nil;
         });
+        mt["__type"] = "Mouse";
         t.MetaTable = mt;
         return t;
     }

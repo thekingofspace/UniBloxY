@@ -10,6 +10,7 @@ public class SignalConnection
     internal Closure Callback;
     internal bool IsOnce;
     public bool Connected { get; private set; } = true;
+    public string ClassName => "SignalConnection";
 
     internal SignalConnection(Signal s, Closure cb, bool once)
     {
@@ -152,6 +153,10 @@ public class Signal
             null, $"{label}.Wait");
 
         t["Wait"] = script.Call(chunk);
+
+        var mt = new Table(script);
+        mt["__type"] = "Signal";
+        t.MetaTable = mt;
 
         return t;
     }
