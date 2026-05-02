@@ -48,3 +48,7 @@ end)
 Test.Name = "grag"
 
 print(game:GetChildren())
+
+task.wait(3)
+
+Test:Destroy()

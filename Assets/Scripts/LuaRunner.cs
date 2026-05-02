@@ -79,6 +79,7 @@ public class LuaRunner : MonoBehaviour
         LuaInstance.EnsureRegistered(Lua);
 
         Game = new LuaInstance(Lua, "DataModel", "game");
+        new DataModel().Initialize(Game);
         Lua.Globals["game"] = Game.Table;
 
         RegisterServices();

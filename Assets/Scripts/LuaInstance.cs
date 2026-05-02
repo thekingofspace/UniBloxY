@@ -43,6 +43,8 @@ public class LuaInstance
     public string ClassName => className;
     public LuaInstance Parent => parent;
     public Table Table => table;
+    public GameObject UnityObject { get; set; }
+    public bool Indestructible { get; set; }
 
     public LuaInstance(Script script, string className, string name = null)
     {
@@ -342,6 +344,7 @@ private Table BuildTable()
     {
         if (name == newName) return;
         name = newName;
+        if (UnityObject != null) UnityObject.name = newName;
         FirePropertyChanged("Name");
     }
 
@@ -371,6 +374,12 @@ private Table BuildTable()
         {
             newParent.children.Add(this);
             newParent.childAdded?.Fire(table);
+        }
+
+        if (UnityObject != null)
+        {
+            var newUnityParent = newParent?.UnityObject;
+            UnityObject.transform.SetParent(newUnityParent != null ? newUnityParent.transform : null, true);
         }
 
         FirePropertyChanged("Parent");
@@ -413,10 +422,17 @@ private Table BuildTable()
     public void Destroy()
     {
         if (destroyed) return;
+        if (Indestructible)
+            throw new ScriptRuntimeException($"{className} \"{name}\" cannot be destroyed");
         destroying?.Fire(table);
         destroyed = true;
         SetParent(null);
         var snap = children.ToArray();
         for (int i = 0; i < snap.Length; i++) snap[i].Destroy();
+        if (UnityObject != null)
+        {
+            UnityEngine.Object.Destroy(UnityObject);
+            UnityObject = null;
+        }
     }
 }
