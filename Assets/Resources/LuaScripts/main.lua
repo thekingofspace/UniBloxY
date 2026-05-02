@@ -47,8 +47,8 @@ end)
 
 Test.Name = "grag"
 
-print(game:GetChildren())
 
-task.wait(3)
-
-Test:Destroy()
+---@type number , Instance
+for i, item in ipairs(game:GetChildren()) do
+    print(i, item.Name, Test.ClassName)
+end

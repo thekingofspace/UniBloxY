@@ -5,8 +5,6 @@
 ------------------------
 
 ---@class Instance
-local InstanceBase = {}
-
 ---@field Name string
 ---@field ClassName string
 ---@field Parent Instance?
@@ -16,6 +14,7 @@ local InstanceBase = {}
 ---@field AncestryChanged Signal<fun(child: Instance, parent: Instance?)>
 ---@field AttributeChanged Signal<fun(attribute: string)>
 ---@field Destroying Signal<fun(instance: Instance)>
+local InstanceBase = {}
 
 ---@param property string
 ---@return Signal<fun()>
