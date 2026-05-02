@@ -1,5 +1,6 @@
 using System;
 using MoonSharp.Interpreter;
+using UnityEngine;
 
 [MoonSharpUserData]
 public class LuaVector2
@@ -124,6 +125,29 @@ public class LuaCFrame
 
     public LuaCFrame Lerp(LuaCFrame other, float t) =>
         new LuaCFrame(Position.Lerp(other.Position, t), Rotation.Lerp(other.Rotation, t));
+
+    public static LuaCFrame operator *(LuaCFrame a, LuaCFrame b)
+    {
+        var qa = Quaternion.Euler(a.Rotation.X, a.Rotation.Y, a.Rotation.Z);
+        var qb = Quaternion.Euler(b.Rotation.X, b.Rotation.Y, b.Rotation.Z);
+        var rotated = qa * new UnityEngine.Vector3(b.Position.X, b.Position.Y, b.Position.Z);
+        var pos = new LuaVector3(
+            a.Position.X + rotated.x,
+            a.Position.Y + rotated.y,
+            a.Position.Z + rotated.z);
+        var euler = (qa * qb).eulerAngles;
+        return new LuaCFrame(pos, new LuaVector3(euler.x, euler.y, euler.z));
+    }
+
+    public static LuaVector3 operator *(LuaCFrame a, LuaVector3 v)
+    {
+        var qa = Quaternion.Euler(a.Rotation.X, a.Rotation.Y, a.Rotation.Z);
+        var rotated = qa * new UnityEngine.Vector3(v.X, v.Y, v.Z);
+        return new LuaVector3(
+            a.Position.X + rotated.x,
+            a.Position.Y + rotated.y,
+            a.Position.Z + rotated.z);
+    }
 
     public override string ToString() => $"Position({Position}), Rotation({Rotation})";
 }

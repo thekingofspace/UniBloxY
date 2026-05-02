@@ -10,10 +10,12 @@ public class LuaMouse
     private readonly Signal moved;
     private readonly Signal buttonDown;
     private readonly Signal buttonUp;
+    private readonly Signal scrolled;
     private readonly Table table;
 
     private Vector2 lastPos;
     private bool positionInitialized;
+    private float lastScrollY;
 
     public LuaMouse(Script script)
     {
@@ -23,6 +25,7 @@ public class LuaMouse
         moved = new Signal(script, "Mouse.Moved");
         buttonDown = new Signal(script, "Mouse.ButtonDown");
         buttonUp = new Signal(script, "Mouse.ButtonUp");
+        scrolled = new Signal(script, "Mouse.Scrolled");
 
         table = BuildTable();
     }
@@ -36,6 +39,8 @@ public class LuaMouse
         t["Moved"] = moved.BuildTable();
         t["ButtonDown"] = buttonDown.BuildTable();
         t["ButtonUp"] = buttonUp.BuildTable();
+        t["Scrolled"] = scrolled.BuildTable();
+
         t["IsButtonDown"] = (System.Func<DynValue, string, bool>)((_, name) => IsButtonDown(name));
 
         var mt = new Table(script);
@@ -47,6 +52,7 @@ public class LuaMouse
         });
         mt["__type"] = "Mouse";
         t.MetaTable = mt;
+
         return t;
     }
 
@@ -77,6 +83,7 @@ public class LuaMouse
         if (m == null) return;
 
         var pos = m.position.ReadValue();
+
         if (!positionInitialized)
         {
             lastPos = pos;
@@ -89,6 +96,13 @@ public class LuaMouse
             moved.Fire(new LuaVector2(pos.x, pos.y), new LuaVector2(delta.x, delta.y));
         }
 
+        var scroll = m.scroll.ReadValue();
+        if (Mathf.Abs(scroll.y - lastScrollY) > 0.01f || scroll.x != 0f)
+        {
+            scrolled.Fire(scroll.x, scroll.y);
+            lastScrollY = scroll.y;
+        }
+
         CheckButton(m.leftButton, "Left");
         CheckButton(m.rightButton, "Right");
         CheckButton(m.middleButton, "Middle");
@@ -97,6 +111,7 @@ public class LuaMouse
     private void CheckButton(ButtonControl b, string name)
     {
         if (b == null) return;
+
         if (b.wasPressedThisFrame) buttonDown.Fire(name);
         if (b.wasReleasedThisFrame)
         {

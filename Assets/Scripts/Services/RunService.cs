@@ -10,6 +10,8 @@ public class RunService : LuaService
     private readonly List<DynValue> closeBindings = new();
     private bool isClosing;
 
+    private float fps;
+
     public override void Register(Script script)
     {
         lua = script;
@@ -26,6 +28,8 @@ public class RunService : LuaService
         if (isClosing) return;
 
         float dt = Time.deltaTime;
+
+        fps = dt > 0f ? 1f / dt : 0f;
 
         heartbeat.Fire(dt);
     }
@@ -76,12 +80,20 @@ public class RunService : LuaService
 
         table["Heartbeat"] = heartbeat.BuildTable();
 
+        table["GetFPS"] = (Func<float>)(() => fps);
+
         table["GetEnvironment"] = (Func<string>)GetEnvironment;
         table["Close"] = (Action)Close;
         table["BindToClose"] = (Func<DynValue, DynValue>)BindToClose;
 
         var mt = new Table(script);
         mt["__type"] = "RunService";
+        mt["__index"] = (Func<Table, DynValue, DynValue>)((_, key) =>
+        {
+            if (key.Type == DataType.String && key.String == "FPS")
+                return DynValue.NewNumber(fps);
+            return DynValue.Nil;
+        });
         table.MetaTable = mt;
 
         return table;

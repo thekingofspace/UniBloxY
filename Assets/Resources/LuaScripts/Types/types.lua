@@ -160,6 +160,8 @@ function UDim2:Lerp(other, t) end
 ---@field Position Vector3
 ---@field Rotation Vector3
 ---@field Angles Vector3  -- euler angles (alias for Rotation)
+---@operator mul(CFrame): CFrame
+---@operator mul(Vector3): Vector3
 
 ---@class CFramelib
 CFrame = {}

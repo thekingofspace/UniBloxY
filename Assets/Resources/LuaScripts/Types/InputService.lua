@@ -12,11 +12,13 @@
 
 ---@class Mouse
 ---@field Clicked Signal<fun(input:string)>
----@field Moved Signal<fun(Position:Vector2, Position:Vector2)>
+---@field Moved Signal<fun(Position:Vector2, Delta:Vector2)>
 ---@field ButtonDown Signal<fun(MouseButton:MouseButtonName)>
 ---@field ButtonUp Signal<fun(MouseButton:MouseButtonName)>
+---@field Scrolled Signal<fun(X:number, Y:number)>
 ---@field IsButtonDown fun(self:Mouse, name:MouseButtonName):boolean
 ---@field Position Vector2
+
 
 ---@class InputService
 ---@field Input Signal<fun(Input:LuaInputObject, State:InputState)>

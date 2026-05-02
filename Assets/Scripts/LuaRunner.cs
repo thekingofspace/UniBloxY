@@ -11,9 +11,19 @@ public class LuaRunner : MonoBehaviour
 
     private readonly Dictionary<string, DynValue> loadedModules = new();
 
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    static void Bootstrap()
+    {
+        if (Instance != null) return;
+
+        var go = new GameObject("LuaRunner");
+        DontDestroyOnLoad(go);
+        go.AddComponent<LuaRunner>();
+    }
+
     void Awake()
     {
-        if (Instance != null)
+        if (Instance != null && Instance != this)
         {
             Destroy(gameObject);
             return;
@@ -22,7 +32,9 @@ public class LuaRunner : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
 
-        Lua = new Script();
+        if (Lua != null) return;
+
+        Lua = new Script(CoreModules.Preset_Complete);
         Lua.Options.ScriptLoader = new ResourceScriptLoader();
 
         Lua.Globals["print"] = new CallbackFunction((ctx, args) =>
@@ -30,6 +42,7 @@ public class LuaRunner : MonoBehaviour
             var parts = new string[args.Count];
             for (int i = 0; i < args.Count; i++)
                 parts[i] = args[i].ToPrintString();
+
             Debug.Log(string.Join("\t", parts));
             return DynValue.Nil;
         });
@@ -39,15 +52,17 @@ public class LuaRunner : MonoBehaviour
         Lua.Globals["typeof"] = new CallbackFunction((ctx, args) =>
         {
             var val = args.Count > 0 ? args[0] : DynValue.Nil;
+
             switch (val.Type)
             {
-                case DataType.Nil:       return DynValue.NewString("nil");
-                case DataType.Boolean:   return DynValue.NewString("boolean");
-                case DataType.Number:    return DynValue.NewString("number");
-                case DataType.String:    return DynValue.NewString("string");
+                case DataType.Nil: return DynValue.NewString("nil");
+                case DataType.Boolean: return DynValue.NewString("boolean");
+                case DataType.Number: return DynValue.NewString("number");
+                case DataType.String: return DynValue.NewString("string");
                 case DataType.Function:
                 case DataType.ClrFunction: return DynValue.NewString("function");
-                case DataType.Thread:    return DynValue.NewString("thread");
+                case DataType.Thread: return DynValue.NewString("thread");
+
                 case DataType.Table:
                     var mt = val.Table.MetaTable;
                     if (mt != null)
@@ -55,10 +70,12 @@ public class LuaRunner : MonoBehaviour
                         var typeVal = mt.RawGet("__type");
                         if (typeVal.Type == DataType.String)
                             return typeVal;
+
                         if (typeVal.Type == DataType.Function || typeVal.Type == DataType.ClrFunction)
                             return ctx.GetScript().Call(typeVal, val);
                     }
                     return DynValue.NewString("table");
+
                 case DataType.UserData:
                     if (val.UserData?.Object != null)
                     {
@@ -70,6 +87,7 @@ public class LuaRunner : MonoBehaviour
                         }
                     }
                     return DynValue.NewString("userdata");
+
                 default:
                     return DynValue.NewString(val.Type.ToString().ToLower());
             }
@@ -79,7 +97,11 @@ public class LuaRunner : MonoBehaviour
         LuaInstance.EnsureRegistered(Lua);
 
         Game = new LuaInstance(Lua, "DataModel", "game");
-        new DataModel().Initialize(Game);
+        var dataModel = (DataModel)LuaInstance.GetClass("DataModel") ?? new DataModel();
+        Game.ClassDef = dataModel;
+        dataModel.Initialize(Game);
+        Game.ForceEnterScene();
+        dataModel.EnsureCamera(Game);
         Lua.Globals["game"] = Game.Table;
 
         RegisterServices();
@@ -112,6 +134,7 @@ public class LuaRunner : MonoBehaviour
     {
         var serviceTypes = typeof(LuaService).Assembly.GetTypes()
             .Where(t => !t.IsAbstract && typeof(LuaService).IsAssignableFrom(t));
+
         foreach (var t in serviceTypes)
             ((LuaService)gameObject.AddComponent(t)).Register(Lua);
     }
@@ -119,6 +142,7 @@ public class LuaRunner : MonoBehaviour
     private DynValue Require(string modname)
     {
         var path = modname.Replace('.', '/');
+
         if (path.EndsWith(".lua"))
             path = path[..^4];
 
@@ -126,12 +150,18 @@ public class LuaRunner : MonoBehaviour
             return cached;
 
         var asset = Resources.Load<TextAsset>($"LuaScripts/{path}");
+
         if (asset == null)
-            throw new ScriptRuntimeException($"module '{modname}' not found at Assets/Resources/LuaScripts/{path}.lua");
+            throw new ScriptRuntimeException(
+                $"module '{modname}' not found at Assets/Resources/LuaScripts/{path}.lua"
+            );
 
         var fn = Lua.LoadString(asset.text, null, path + ".lua");
         var result = Lua.Call(fn);
-        if (result.IsNil()) result = DynValue.True;
+
+        if (result.IsNil())
+            result = DynValue.True;
+
         loadedModules[path] = result;
         return result;
     }

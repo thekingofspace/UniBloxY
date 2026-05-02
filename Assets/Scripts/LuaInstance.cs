@@ -7,12 +7,18 @@ using UnityEngine;
 public class LuaInstance
 {
     private static bool registered;
-    private static readonly Dictionary<string, Action<LuaInstance>> classRegistry = new();
+    private static readonly Dictionary<string, LuaInstanceClass> classRegistry = new();
     private static DynValue sharedNewIndex;
 
-    public static void RegisterClass(string className, Action<LuaInstance> initializer = null)
+    public static void RegisterClass(LuaInstanceClass def)
     {
-        classRegistry[className] = initializer;
+        classRegistry[def.ClassName] = def;
+    }
+
+    public static LuaInstanceClass GetClass(string className)
+    {
+        classRegistry.TryGetValue(className, out var def);
+        return def;
     }
 
     private readonly Script script;
@@ -38,13 +44,24 @@ public class LuaInstance
     private Signal destroying; private Table destroyingTable;
 
     private bool destroyed;
+    private bool inScene;
 
     public string Name => name;
     public string ClassName => className;
     public LuaInstance Parent => parent;
     public Table Table => table;
+    public Script Script => script;
+    public IReadOnlyList<LuaInstance> Children => children;
+
     public GameObject UnityObject { get; set; }
+    public LuaInstanceClass ClassDef { get; set; }
+    public object UserState { get; set; }
+
     public bool Indestructible { get; set; }
+    public bool Reparentable { get; set; } = true;
+    public bool IsSceneRoot { get; set; }
+
+    public bool InScene => inScene;
 
     public LuaInstance(Script script, string className, string name = null)
     {
@@ -74,7 +91,7 @@ public class LuaInstance
         foreach (var t in classTypes)
         {
             var def = (LuaInstanceClass)Activator.CreateInstance(t);
-            RegisterClass(def.ClassName, def.Initialize);
+            RegisterClass(def);
         }
 
         var lib = new Table(script);
@@ -82,10 +99,11 @@ public class LuaInstance
         {
             if (string.IsNullOrEmpty(cn))
                 throw new ScriptRuntimeException("Instance.new: ClassName must be a string");
-            if (!classRegistry.TryGetValue(cn, out var init))
+            if (!classRegistry.TryGetValue(cn, out var def))
                 throw new ScriptRuntimeException($"Unable to create an Instance of type \"{cn}\"");
             var inst = new LuaInstance(script, cn);
-            init?.Invoke(inst);
+            inst.ClassDef = def;
+            def.Initialize(inst);
             if (parentVal != null && parentVal.Type == DataType.Table)
             {
                 var p = ResolveInstance(parentVal);
@@ -98,7 +116,7 @@ public class LuaInstance
         script.Globals["Instance"] = lib;
     }
 
-    private static LuaInstance ResolveInstance(DynValue v)
+    public static LuaInstance ResolveInstance(DynValue v)
     {
         if (v == null || v.Type != DataType.Table) return null;
         var raw = v.Table.RawGet("__instance");
@@ -107,7 +125,7 @@ public class LuaInstance
         return null;
     }
 
-private Table BuildTable()
+    private Table BuildTable()
     {
         var t = new Table(script);
 
@@ -258,6 +276,8 @@ private Table BuildTable()
                     if (destroying == null) { destroying = new Signal(script, $"{className}.Destroying"); destroyingTable = destroying.BuildTable(); }
                     return DynValue.NewTable(destroyingTable);
             }
+            if (ClassDef != null && ClassDef.TryGetProperty(this, k, out var classVal))
+                return classVal;
             var child = FindFirstChild(k, false);
             if (child != null) return DynValue.NewTable(child.table);
             return DynValue.Nil;
@@ -291,6 +311,11 @@ private Table BuildTable()
                     return DynValue.Nil;
                 case "ClassName":
                     throw new ScriptRuntimeException("ClassName is read-only");
+            }
+            if (ClassDef != null && ClassDef.TrySetProperty(this, k, val))
+            {
+                FirePropertyChanged(k);
+                return DynValue.Nil;
             }
             selfVal.Table.Set(keyVal, val);
             return DynValue.Nil;
@@ -328,6 +353,13 @@ private Table BuildTable()
         return null;
     }
 
+    public LuaInstance FindFirstChildOfClass(string cn)
+    {
+        for (int i = 0; i < children.Count; i++)
+            if (children[i].className == cn) return children[i];
+        return null;
+    }
+
     public bool IsDescendantOf(LuaInstance other)
     {
         if (other == null) return false;
@@ -348,11 +380,25 @@ private Table BuildTable()
         FirePropertyChanged("Name");
     }
 
+    public void FirePropertyChanged(string prop)
+    {
+        if (propertyChangedSignals.TryGetValue(prop, out var sig)) sig.Fire();
+        changed.Fire(prop);
+    }
+
     public void SetParent(LuaInstance newParent)
     {
         if (destroyed && newParent != null)
             throw new ScriptRuntimeException($"Cannot set Parent of destroyed instance");
-        if (newParent == parent) return;
+        if (newParent == parent)
+        {
+            if (newParent != null && newParent.IsSceneRoot)
+                newParent.ClassDef?.OnChildAdded(newParent, this);
+            return;
+        }
+
+        if (!Reparentable && parent != null)
+            throw new ScriptRuntimeException($"{className} \"{name}\" cannot be reparented");
 
         var p = newParent;
         while (p != null)
@@ -366,6 +412,7 @@ private Table BuildTable()
         {
             old.children.Remove(this);
             old.childRemoved?.Fire(table);
+            old.ClassDef?.OnChildRemoved(old, this);
         }
 
         parent = newParent;
@@ -374,7 +421,10 @@ private Table BuildTable()
         {
             newParent.children.Add(this);
             newParent.childAdded?.Fire(table);
+            newParent.ClassDef?.OnChildAdded(newParent, this);
         }
+
+        UpdateInSceneRecursive(this);
 
         if (UnityObject != null)
         {
@@ -386,17 +436,44 @@ private Table BuildTable()
         FireAncestryChangedRecursive(this, newParent);
     }
 
+    private static bool ComputeInScene(LuaInstance node)
+    {
+        var p = node;
+        while (p != null)
+        {
+            if (p.IsSceneRoot) return true;
+            p = p.parent;
+        }
+        return false;
+    }
+
+    private static void UpdateInSceneRecursive(LuaInstance node)
+    {
+        var newInScene = ComputeInScene(node);
+        if (newInScene != node.inScene)
+        {
+            node.inScene = newInScene;
+            if (newInScene) node.ClassDef?.OnEnterScene(node);
+            else node.ClassDef?.OnExitScene(node);
+        }
+        for (int i = 0; i < node.children.Count; i++)
+            UpdateInSceneRecursive(node.children[i]);
+    }
+
+    public void ForceEnterScene()
+    {
+        if (inScene) return;
+        inScene = true;
+        ClassDef?.OnEnterScene(this);
+        for (int i = 0; i < children.Count; i++)
+            UpdateInSceneRecursive(children[i]);
+    }
+
     private static void FireAncestryChangedRecursive(LuaInstance node, LuaInstance newParent)
     {
         node.ancestryChanged?.Fire(node.table, newParent != null ? (object)newParent.table : null);
         for (int i = 0; i < node.children.Count; i++)
             FireAncestryChangedRecursive(node.children[i], node.children[i].parent);
-    }
-
-    private void FirePropertyChanged(string prop)
-    {
-        if (propertyChangedSignals.TryGetValue(prop, out var sig)) sig.Fire();
-        changed.Fire(prop);
     }
 
     public void SetAttribute(string key, DynValue val)
@@ -410,6 +487,8 @@ private Table BuildTable()
     public LuaInstance Clone()
     {
         var copy = new LuaInstance(script, className, name);
+        copy.ClassDef = ClassDef;
+        ClassDef?.Initialize(copy);
         foreach (var kv in attributes) copy.attributes[kv.Key] = kv.Value;
         for (int i = 0; i < children.Count; i++)
         {

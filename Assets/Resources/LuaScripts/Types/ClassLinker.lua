@@ -1,0 +1,2 @@
+---@class CreatableInstances
+---@field Folder Folder
