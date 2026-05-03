@@ -101,10 +101,21 @@ public class BaseCube : Shadable
         }
     }
 
+    private static Shader defaultShader;
+
     private static void CreateCube(LuaInstance instance, State s)
     {
         var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
         go.name = instance.Name;
+
+        var renderer = go.GetComponent<Renderer>();
+        if (renderer != null)
+        {
+            if (defaultShader == null)
+                defaultShader = Resources.Load<Shader>("Shaders/Default");
+            renderer.sharedMaterial = defaultShader != null ? new Material(defaultShader) : null;
+        }
+
         instance.UnityObject = go;
         ApplyTransform(instance, s);
     }

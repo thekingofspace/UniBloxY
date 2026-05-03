@@ -42,6 +42,14 @@ public class LuaMouse
         t["Scrolled"] = scrolled.BuildTable();
 
         t["IsButtonDown"] = (System.Func<DynValue, string, bool>)((_, name) => IsButtonDown(name));
+        t["SetLocked"] = (System.Action<DynValue, bool>)((_, locked) =>
+        {
+            Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
+        });
+        t["SetVisible"] = (System.Action<DynValue, bool>)((_, visible) =>
+        {
+            Cursor.visible = visible;
+        });
 
         var mt = new Table(script);
         mt["__index"] = (System.Func<DynValue, DynValue, DynValue>)((_, key) =>

@@ -33,6 +33,31 @@ public class Camera : LuaInstanceClass
         {
             return UserData.Create(new LuaVector2(Screen.width, Screen.height));
         });
+
+        instance.Table["GetViewSize"] = DynValue.NewCallback((ctx, args) =>
+        {
+            var s = (State)instance.UserState;
+            float distance = 10f;
+            if (args.Count >= 1 && args[0].Type == DataType.Number)
+                distance = (float)args[0].Number;
+            else if (args.Count >= 2 && args[1].Type == DataType.Number)
+                distance = (float)args[1].Number;
+
+            float aspect = GetAspect(s);
+            float fov = s.FOV;
+            float height = 2f * Mathf.Abs(distance) * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad);
+            float width = height * aspect;
+            return UserData.Create(new LuaVector2(width, height));
+        });
+    }
+
+    private static float GetAspect(State s)
+    {
+        if (s.Cam != null && s.Cam.pixelHeight > 0)
+            return s.Cam.pixelWidth / (float)s.Cam.pixelHeight;
+        if (Screen.height > 0)
+            return Screen.width / (float)Screen.height;
+        return 1f;
     }
 
     public override bool TryGetProperty(LuaInstance instance, string key, out DynValue value)
@@ -42,6 +67,7 @@ public class Camera : LuaInstanceClass
         {
             case "CFrame": value = UserData.Create(s.CFrame); return true;
             case "FOV": value = DynValue.NewNumber(s.FOV); return true;
+            case "Aspect": value = DynValue.NewNumber(GetAspect(s)); return true;
         }
         value = DynValue.Nil;
         return false;

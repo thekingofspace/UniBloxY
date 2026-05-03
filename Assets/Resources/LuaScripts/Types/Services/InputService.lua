@@ -17,6 +17,8 @@
 ---@field ButtonUp Signal<fun(MouseButton:MouseButtonName)>
 ---@field Scrolled Signal<fun(X:number, Y:number)>
 ---@field IsButtonDown fun(self:Mouse, name:MouseButtonName):boolean
+---@field SetLocked fun(self:Mouse, locked:boolean)
+---@field SetVisible fun(self:Mouse, visible:boolean)
 ---@field Position Vector2
 
 
