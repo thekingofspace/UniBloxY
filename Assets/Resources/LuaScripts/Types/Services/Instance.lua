@@ -8,6 +8,7 @@
 ---@field Name string
 ---@field ClassName string
 ---@field Parent Instance?
+---@field Moveable boolean  -- read-only; true means descendants follow this instance when it moves
 ---@field Changed Signal<fun(property: string)>
 ---@field ChildAdded Signal<fun(child: Instance)>
 ---@field ChildRemoved Signal<fun(child: Instance)>

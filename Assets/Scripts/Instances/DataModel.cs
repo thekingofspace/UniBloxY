@@ -60,6 +60,7 @@ public class DataModel : LuaInstanceClass
         inst.ClassDef = def;
         inst.UnityObject = go;
         def.Initialize(inst);
+        def.ImportFromUnityObject(inst, go);
         inst.SetParent(gameInstance);
         return inst;
     }

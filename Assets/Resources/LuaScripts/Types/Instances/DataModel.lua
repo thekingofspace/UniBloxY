@@ -5,7 +5,8 @@
 ---@field CurrentCamera Camera?
 local DataModel = {}
 
+---@generic K: keyof CreatableInstances
 ---@param name string
----@param className string
----@return Instance?
+---@param className K
+---@return CreatableInstances[K]?
 function DataModel:ObjectAsInstance(name, className) end

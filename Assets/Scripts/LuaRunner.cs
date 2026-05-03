@@ -1,6 +1,10 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
 using MoonSharp.Interpreter;
+using MoonSharp.Interpreter.Debugging;
 using UnityEngine;
 
 public class LuaRunner : MonoBehaviour
@@ -10,6 +14,7 @@ public class LuaRunner : MonoBehaviour
     public LuaInstance Game { get; private set; }
 
     private readonly Dictionary<string, DynValue> loadedModules = new();
+    private readonly Dictionary<string, string[]> sourceLines = new();
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
@@ -114,19 +119,33 @@ public class LuaRunner : MonoBehaviour
             return;
         }
 
+        RunScript(main.text, "main.lua");
+    }
+
+    private void RunScript(string source, string name)
+    {
+        sourceLines[name] = source.Replace("\r\n", "\n").Split('\n');
         try
         {
-            var fn = Lua.LoadString(main.text, null, "main.lua");
+            var fn = Lua.LoadString(source, null, name);
             var co = Lua.CreateCoroutine(fn);
             co.Coroutine.Resume();
         }
+        catch (SyntaxErrorException ex)
+        {
+            ReportSyntaxError(ex, name);
+        }
         catch (ScriptRuntimeException ex)
         {
-            Debug.LogError($"Lua error: {ex.DecoratedMessage}");
+            ReportRuntimeError(ex);
         }
-        catch (System.Exception ex)
+        catch (InterpreterException ex)
         {
-            Debug.LogError($"Lua host error: {ex}");
+            ReportRuntimeError(ex);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[Lua host error] {ex}");
         }
     }
 
@@ -156,7 +175,10 @@ public class LuaRunner : MonoBehaviour
                 $"module '{modname}' not found at Assets/Resources/LuaScripts/{path}.lua"
             );
 
-        var fn = Lua.LoadString(asset.text, null, path + ".lua");
+        var srcName = path + ".lua";
+        sourceLines[srcName] = asset.text.Replace("\r\n", "\n").Split('\n');
+
+        var fn = Lua.LoadString(asset.text, null, srcName);
         var result = Lua.Call(fn);
 
         if (result.IsNil())
@@ -164,5 +186,118 @@ public class LuaRunner : MonoBehaviour
 
         loadedModules[path] = result;
         return result;
+    }
+
+    // ----------------------------------------------------------------------
+    // Error reporting
+    // ----------------------------------------------------------------------
+
+    private static readonly Regex LocRegex =
+        new Regex(@"^(?<src>[^:]+):\((?<line>\d+),(?<from>\d+)(?:-(?<to>\d+))?\):\s*(?<msg>.*)$",
+            RegexOptions.Compiled);
+
+    private void ReportRuntimeError(InterpreterException ex)
+    {
+        var sb = new StringBuilder();
+        sb.Append("[Lua runtime error] ");
+
+        var msg = ex.DecoratedMessage ?? ex.Message;
+        sb.AppendLine(msg);
+
+        var m = LocRegex.Match(msg ?? "");
+        if (m.Success)
+        {
+            var src = m.Groups["src"].Value;
+            int line = int.Parse(m.Groups["line"].Value);
+            int from = int.Parse(m.Groups["from"].Value);
+            int to = m.Groups["to"].Success ? int.Parse(m.Groups["to"].Value) : from;
+            AppendSnippet(sb, src, line, from, to);
+        }
+
+        AppendStackTrace(sb, ex);
+        Debug.LogError(sb.ToString());
+    }
+
+    private void ReportSyntaxError(SyntaxErrorException ex, string fallbackSource)
+    {
+        var sb = new StringBuilder();
+        sb.Append("[Lua syntax error] ");
+        var msg = ex.DecoratedMessage ?? ex.Message;
+        sb.AppendLine(msg);
+
+        var m = LocRegex.Match(msg ?? "");
+        if (m.Success)
+        {
+            var src = m.Groups["src"].Value;
+            int line = int.Parse(m.Groups["line"].Value);
+            int from = int.Parse(m.Groups["from"].Value);
+            int to = m.Groups["to"].Success ? int.Parse(m.Groups["to"].Value) : from;
+            AppendSnippet(sb, src, line, from, to);
+        }
+        else if (sourceLines.ContainsKey(fallbackSource))
+        {
+            sb.AppendLine($"  in {fallbackSource}");
+        }
+
+        Debug.LogError(sb.ToString());
+    }
+
+    private void AppendSnippet(StringBuilder sb, string sourceName, int line, int fromCol, int toCol)
+    {
+        if (!sourceLines.TryGetValue(sourceName, out var lines)) return;
+        if (line < 1 || line > lines.Length) return;
+
+        int contextBefore = 1;
+        int contextAfter = 1;
+        int start = Math.Max(1, line - contextBefore);
+        int end = Math.Min(lines.Length, line + contextAfter);
+
+        int gutter = end.ToString().Length;
+
+        sb.AppendLine();
+        for (int i = start; i <= end; i++)
+        {
+            string prefix = i == line ? ">" : " ";
+            sb.Append(prefix)
+              .Append(' ')
+              .Append(i.ToString().PadLeft(gutter))
+              .Append(" | ")
+              .AppendLine(lines[i - 1]);
+
+            if (i == line && fromCol >= 0)
+            {
+                int caretStart = Math.Max(0, fromCol);
+                int caretLen = Math.Max(1, toCol - fromCol);
+                sb.Append("  ")
+                  .Append(new string(' ', gutter))
+                  .Append(" | ")
+                  .Append(new string(' ', caretStart))
+                  .Append(new string('^', caretLen))
+                  .AppendLine();
+            }
+        }
+    }
+
+    private void AppendStackTrace(StringBuilder sb, InterpreterException ex)
+    {
+        var stack = ex.CallStack;
+        if (stack == null || stack.Count == 0) return;
+
+        sb.AppendLine("Stack traceback:");
+        foreach (var frame in stack)
+        {
+            var loc = frame.Location;
+            string where = "[C]";
+            if (loc != null && loc.SourceIdx >= 0)
+            {
+                string srcName = null;
+                try { srcName = Lua.GetSourceCode(loc.SourceIdx)?.Name; } catch { }
+                if (!string.IsNullOrEmpty(srcName))
+                    where = $"{srcName}:{loc.FromLine}";
+            }
+
+            string fnName = string.IsNullOrEmpty(frame.Name) ? "?" : frame.Name;
+            sb.Append("  at ").Append(fnName).Append(" (").Append(where).AppendLine(")");
+        }
     }
 }

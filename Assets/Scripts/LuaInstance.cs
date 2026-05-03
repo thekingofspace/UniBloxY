@@ -60,6 +60,7 @@ public class LuaInstance
     public bool Indestructible { get; set; }
     public bool Reparentable { get; set; } = true;
     public bool IsSceneRoot { get; set; }
+    public bool Moveable { get; set; }
 
     public bool InScene => inScene;
 
@@ -255,6 +256,7 @@ public class LuaInstance
             {
                 case "Name": return DynValue.NewString(name);
                 case "ClassName": return DynValue.NewString(className);
+                case "Moveable": return DynValue.NewBoolean(Moveable);
                 case "Parent":
                     return parent != null ? DynValue.NewTable(parent.table) : DynValue.Nil;
                 case "Changed":
@@ -311,6 +313,8 @@ public class LuaInstance
                     return DynValue.Nil;
                 case "ClassName":
                     throw new ScriptRuntimeException("ClassName is read-only");
+                case "Moveable":
+                    throw new ScriptRuntimeException("Moveable is read-only");
             }
             if (ClassDef != null && ClassDef.TrySetProperty(this, k, val))
             {
@@ -426,7 +430,7 @@ public class LuaInstance
 
         UpdateInSceneRecursive(this);
 
-        if (UnityObject != null)
+        if (UnityObject != null && (ClassDef?.ParentsUnityObject ?? true))
         {
             var newUnityParent = newParent?.UnityObject;
             UnityObject.transform.SetParent(newUnityParent != null ? newUnityParent.transform : null, true);
@@ -472,6 +476,7 @@ public class LuaInstance
     private static void FireAncestryChangedRecursive(LuaInstance node, LuaInstance newParent)
     {
         node.ancestryChanged?.Fire(node.table, newParent != null ? (object)newParent.table : null);
+        node.ClassDef?.OnAncestryChanged(node);
         for (int i = 0; i < node.children.Count; i++)
             FireAncestryChangedRecursive(node.children[i], node.children[i].parent);
     }

@@ -1,2 +1,4 @@
 ---@class CreatableInstances
 ---@field Folder Folder
+---@field BaseCube BaseCube
+---@field RenderGroup RenderGroup

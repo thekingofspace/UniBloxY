@@ -1,4 +1,5 @@
 using MoonSharp.Interpreter;
+using UnityEngine;
 
 public abstract class LuaInstanceClass
 {
@@ -6,11 +7,17 @@ public abstract class LuaInstanceClass
 
     public virtual void Initialize(LuaInstance instance) { }
 
+    public virtual bool ParentsUnityObject => true;
+
+    public virtual void ImportFromUnityObject(LuaInstance instance, GameObject go) { }
+
     public virtual void OnEnterScene(LuaInstance instance) { }
     public virtual void OnExitScene(LuaInstance instance) { }
 
     public virtual void OnChildAdded(LuaInstance instance, LuaInstance child) { }
     public virtual void OnChildRemoved(LuaInstance instance, LuaInstance child) { }
+
+    public virtual void OnAncestryChanged(LuaInstance instance) { }
 
     public virtual bool TryGetProperty(LuaInstance instance, string key, out DynValue value)
     {
