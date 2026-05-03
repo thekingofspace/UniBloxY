@@ -32,11 +32,35 @@ local leftX = -paddleX()
 local rightX = paddleX()
 
 local playerSpeed = 14
-local aiSpeed = 4
-local aiReactDelay = 0.18
-local startSpeed = 8
-local maxSpeed = 20
-local speedupOnHit = 1.05
+
+-- Difficulty scales every round: +1 step on a player score, -1 on a player loss.
+-- Each derived value lerps between an "easy" and "hard" anchor based on level.
+local difficulty = 0
+local minDifficulty = -3
+local maxDifficulty = 6
+
+local function diffT()
+	-- Maps difficulty into 0..1 for easy linear interpolation.
+	local span = maxDifficulty - minDifficulty
+	return (difficulty - minDifficulty) / span
+end
+
+local function lerp(a, b, t)
+	return a + (b - a) * t
+end
+
+-- Per-round parameters (recomputed whenever difficulty changes).
+local aiSpeed, aiReactDelay, startSpeed, maxSpeed, speedupOnHit
+
+local function applyDifficulty()
+	local t = diffT()
+	aiSpeed       = lerp(2.5,  11.0, t)   -- AI tracking responsiveness
+	aiReactDelay  = lerp(0.45, 0.04, t)   -- seconds AI ignores incoming ball
+	startSpeed    = lerp(5.0,  13.0, t)   -- ball speed off a reset
+	maxSpeed      = lerp(14.0, 32.0, t)   -- per-rally cap
+	speedupOnHit  = lerp(1.02, 1.09, t)   -- ramp inside a rally
+end
+applyDifficulty()
 
 local left = Instance.New("BaseCube", game)
 left.Size = paddleSize
@@ -108,6 +132,14 @@ local ballVel = Vector3.new(startSpeed, startSpeed * 0.4, 0)
 local leftY = 0
 local rightY = 0
 
+-- Match-end blink state. While blinkTogglesLeft > 0, physics is paused and
+-- the ball's Render flag flips every blinkInterval seconds. We want 3 full
+-- off→on cycles (6 toggles) ending visible.
+local blinkTogglesLeft = 0
+local blinkTimer = 0
+local blinkInterval = 0.15
+local pendingServeDir = 1
+
 local function clamp(v, lo, hi)
 	if v < lo then return lo end
 	if v > hi then return hi end
@@ -124,6 +156,25 @@ local function resetBall(dir)
 	ballVel = Vector3.new(startSpeed * dir, startSpeed * 0.4, 0)
 end
 
+local function startMatchReset(serveDir)
+	-- Hide the ball off-field and trigger the blink sequence. Physics is
+	-- frozen during the blink (the heartbeat skips its main body).
+	ballPos = Vector3.new(0, 0, 0)
+	ballVel = Vector3.new(0, 0, 0)
+	ball.Render = false
+	blinkTogglesLeft = 6
+	blinkTimer = 0
+	pendingServeDir = serveDir
+end
+
+local function finishMatchReset()
+	lives = maxLives
+	aiLives = maxLives
+	refreshLifeCubes()
+	resetBall(pendingServeDir)
+	ball.Render = true
+end
+
 local function clampPaddle(y)
 	return clamp(y, -viewHeight + halfPaddleY, viewHeight - halfPaddleY)
 end
@@ -136,6 +187,22 @@ RunService.Heartbeat:Connect(function(dt)
 	leftX = -paddleX()
 	rightX = paddleX()
 	refreshLifeCubes()
+
+	-- Match-reset blink: pause physics, flicker the ball, then resume.
+	if blinkTogglesLeft > 0 then
+		blinkTimer = blinkTimer + dt
+		while blinkTimer >= blinkInterval and blinkTogglesLeft > 0 do
+			blinkTimer = blinkTimer - blinkInterval
+			ball.Render = not ball.Render
+			blinkTogglesLeft = blinkTogglesLeft - 1
+		end
+		left.CFrame = CFrame.new(leftX, leftY, 0)
+		right.CFrame = CFrame.new(rightX, rightY, 0)
+		if blinkTogglesLeft <= 0 then
+			finishMatchReset()
+		end
+		return
+	end
 
 	-- Player paddle: W/S or Up/Down, fall back to mouse Y
 	local move = 0
@@ -202,12 +269,16 @@ RunService.Heartbeat:Connect(function(dt)
 		ballVel = Vector3.new(-math.abs(math.cos(angle)) * speed, math.sin(angle) * speed, 0)
 	end
 
-	-- Score: ball escaped past a paddle
+	-- Score: ball escaped past a paddle. Lives drive the match; difficulty
+	-- only changes when a whole match ends.
 	if nx < -viewWidth - 1 then
 		lives = lives - 1
 		refreshLifeCubes()
 		if lives <= 0 then
-			RunService.Close()
+			-- Player lost the match → AI gets weaker for the next one.
+			difficulty = math.max(minDifficulty, difficulty - 1)
+			applyDifficulty()
+			startMatchReset(1)
 			return
 		end
 		resetBall(1)
@@ -216,7 +287,10 @@ RunService.Heartbeat:Connect(function(dt)
 		aiLives = aiLives - 1
 		refreshLifeCubes()
 		if aiLives <= 0 then
-			RunService.Close()
+			-- Player won the match → AI gets faster, sharper, meaner.
+			difficulty = math.min(maxDifficulty, difficulty + 1)
+			applyDifficulty()
+			startMatchReset(-1)
 			return
 		end
 		resetBall(-1)

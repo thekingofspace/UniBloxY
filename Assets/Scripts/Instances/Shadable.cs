@@ -8,6 +8,9 @@ public abstract class Shadable : Renderable
     private class ShadableData
     {
         public readonly List<LuaShader> Shaders = new();
+        public readonly List<Material> ShaderInstances = new();
+        public readonly List<LuaMaterial> Materials = new();
+        public readonly Dictionary<LuaMaterial, Material> MaterialInstances = new();
     }
 
     private static readonly ConditionalWeakTable<LuaInstance, ShadableData> data = new();
@@ -17,7 +20,7 @@ public abstract class Shadable : Renderable
 
     protected override void OnRenderStateChanged(LuaInstance instance)
     {
-        ApplyShaders(instance);
+        ApplyAll(instance);
     }
 
     public override bool TryGetProperty(LuaInstance instance, string key, out DynValue value)
@@ -27,19 +30,14 @@ public abstract class Shadable : Renderable
             case "AddShader":
                 value = DynValue.NewCallback((ctx, args) =>
                 {
-                    var shader = ResolveShader(args, 1);
-                    AddShader(instance, shader);
+                    AddShader(instance, ResolveShader(args, 1));
                     return DynValue.Nil;
                 });
                 return true;
 
             case "RemoveShader":
                 value = DynValue.NewCallback((ctx, args) =>
-                {
-                    var shader = ResolveShader(args, 1);
-                    var removed = RemoveShader(instance, shader);
-                    return DynValue.NewBoolean(removed);
-                });
+                    DynValue.NewBoolean(RemoveShader(instance, ResolveShader(args, 1))));
                 return true;
 
             case "ListShaders":
@@ -47,8 +45,7 @@ public abstract class Shadable : Renderable
                 {
                     var tbl = new Table(instance.Script);
                     var list = Get(instance).Shaders;
-                    for (int i = 0; i < list.Count; i++)
-                        tbl[i + 1] = UserData.Create(list[i]);
+                    for (int i = 0; i < list.Count; i++) tbl[i + 1] = UserData.Create(list[i]);
                     return DynValue.NewTable(tbl);
                 });
                 return true;
@@ -65,6 +62,43 @@ public abstract class Shadable : Renderable
                     return DynValue.Nil;
                 });
                 return true;
+
+            case "AddMaterial":
+                value = DynValue.NewCallback((ctx, args) =>
+                {
+                    AddMaterial(instance, ResolveMaterial(args, 1));
+                    return DynValue.Nil;
+                });
+                return true;
+
+            case "RemoveMaterial":
+                value = DynValue.NewCallback((ctx, args) =>
+                    DynValue.NewBoolean(RemoveMaterial(instance, ResolveMaterial(args, 1))));
+                return true;
+
+            case "ListMaterials":
+                value = DynValue.NewCallback((ctx, args) =>
+                {
+                    var tbl = new Table(instance.Script);
+                    var list = Get(instance).Materials;
+                    for (int i = 0; i < list.Count; i++) tbl[i + 1] = UserData.Create(list[i]);
+                    return DynValue.NewTable(tbl);
+                });
+                return true;
+
+            case "SetMaterialProperty":
+            case "SetMaterialData":
+                value = DynValue.NewCallback((ctx, args) =>
+                {
+                    var mat = ResolveMaterial(args, 1);
+                    var propName = args.Count > 2 ? args[2].String : null;
+                    var dataVal = args.Count > 3 ? args[3] : DynValue.Nil;
+                    if (string.IsNullOrEmpty(propName))
+                        throw new ScriptRuntimeException("SetMaterialProperty requires a property name");
+                    SetMaterialProperty(instance, mat, propName, dataVal);
+                    return DynValue.Nil;
+                });
+                return true;
         }
 
         return base.TryGetProperty(instance, key, out value);
@@ -72,12 +106,18 @@ public abstract class Shadable : Renderable
 
     private static LuaShader ResolveShader(CallbackArguments args, int index)
     {
-        if (args.Count <= index)
-            throw new ScriptRuntimeException("Shader argument missing");
+        if (args.Count <= index) throw new ScriptRuntimeException("Shader argument missing");
         var v = args[index];
-        if (v.Type == DataType.UserData && v.UserData.Object is LuaShader s)
-            return s;
+        if (v.Type == DataType.UserData && v.UserData.Object is LuaShader s) return s;
         throw new ScriptRuntimeException("Argument must be a Shader from ShaderService:GetShader");
+    }
+
+    private static LuaMaterial ResolveMaterial(CallbackArguments args, int index)
+    {
+        if (args.Count <= index) throw new ScriptRuntimeException("Material argument missing");
+        var v = args[index];
+        if (v.Type == DataType.UserData && v.UserData.Object is LuaMaterial m) return m;
+        throw new ScriptRuntimeException("Argument must be a Material from ShaderService:GetMaterial");
     }
 
     public void AddShader(LuaInstance instance, LuaShader shader)
@@ -86,78 +126,84 @@ public abstract class Shadable : Renderable
         var d = Get(instance);
         if (d.Shaders.Contains(shader)) return;
         d.Shaders.Add(shader);
-        ApplyShaders(instance);
+        d.ShaderInstances.Add(new Material(shader.Shader));
+        ApplyAll(instance);
     }
 
     public bool RemoveShader(LuaInstance instance, LuaShader shader)
     {
         if (shader == null) return false;
         var d = Get(instance);
-        var removed = d.Shaders.Remove(shader);
-        if (removed) ApplyShaders(instance);
-        return removed;
+        var idx = d.Shaders.IndexOf(shader);
+        if (idx < 0) return false;
+        d.Shaders.RemoveAt(idx);
+        d.ShaderInstances.RemoveAt(idx);
+        ApplyAll(instance);
+        return true;
     }
 
-    private static void ApplyShaders(LuaInstance instance)
+    public void AddMaterial(LuaInstance instance, LuaMaterial material)
+    {
+        if (material == null) return;
+        var d = Get(instance);
+        if (d.Materials.Contains(material)) return;
+        d.Materials.Add(material);
+        d.MaterialInstances[material] = material.CreateInstance();
+        ApplyAll(instance);
+    }
+
+    public bool RemoveMaterial(LuaInstance instance, LuaMaterial material)
+    {
+        if (material == null) return false;
+        var d = Get(instance);
+        if (!d.Materials.Remove(material)) return false;
+        if (d.MaterialInstances.TryGetValue(material, out var inst))
+        {
+            material.DropInstance(inst);
+            d.MaterialInstances.Remove(material);
+        }
+        ApplyAll(instance);
+        return true;
+    }
+
+    private static void ApplyAll(LuaInstance instance)
     {
         var go = instance.UnityObject;
         if (go == null) return;
         var renderer = go.GetComponent<Renderer>();
         if (renderer == null) return;
 
-        var list = Get(instance).Shaders;
-        if (list.Count == 0) return;
+        var d = Get(instance);
+        var total = d.ShaderInstances.Count + d.Materials.Count;
+        if (total == 0) return;
 
-        var mats = new Material[list.Count];
-        for (int i = 0; i < list.Count; i++)
-            mats[i] = new Material(list[i].Shader);
-        renderer.materials = mats;
+        var mats = new Material[total];
+        for (int i = 0; i < d.ShaderInstances.Count; i++)
+            mats[i] = d.ShaderInstances[i];
+        for (int i = 0; i < d.Materials.Count; i++)
+            mats[d.ShaderInstances.Count + i] = d.MaterialInstances[d.Materials[i]];
+
+        // sharedMaterials avoids Unity's auto-clone, so our tracked instances
+        // remain the same objects the renderer is drawing — material-wide
+        // property edits propagate correctly.
+        renderer.sharedMaterials = mats;
     }
 
     private static void SetShaderData(LuaInstance instance, LuaShader shader, string prop, DynValue value)
     {
-        var go = instance.UnityObject;
-        if (go == null) return;
-        var renderer = go.GetComponent<Renderer>();
-        if (renderer == null) return;
-
-        var mats = renderer.materials;
-        for (int i = 0; i < mats.Length; i++)
+        var d = Get(instance);
+        for (int i = 0; i < d.Shaders.Count; i++)
         {
-            if (mats[i].shader != shader.Shader) continue;
-            ApplyValue(mats[i], prop, value);
+            if (d.Shaders[i] == shader)
+                MaterialProps.Apply(d.ShaderInstances[i], prop, value);
         }
-        renderer.materials = mats;
     }
 
-    private static void ApplyValue(Material mat, string prop, DynValue value)
+    private static void SetMaterialProperty(LuaInstance instance, LuaMaterial material, string prop, DynValue value)
     {
-        switch (value.Type)
-        {
-            case DataType.Number:
-                mat.SetFloat(prop, (float)value.Number);
-                break;
-            case DataType.Boolean:
-                mat.SetInt(prop, value.Boolean ? 1 : 0);
-                break;
-            case DataType.String:
-                mat.SetTextureOffset(prop, Vector2.zero);
-                break;
-            case DataType.UserData:
-                var obj = value.UserData.Object;
-                if (obj is LuaVector3 v3)
-                    mat.SetVector(prop, new Vector4(v3.X, v3.Y, v3.Z, 0f));
-                else if (obj is Color col)
-                    mat.SetColor(prop, col);
-                else if (obj is Vector4 v4)
-                    mat.SetVector(prop, v4);
-                else if (obj is Texture tex)
-                    mat.SetTexture(prop, tex);
-                else
-                    throw new ScriptRuntimeException($"SetShaderData: unsupported value type for \"{prop}\"");
-                break;
-            default:
-                throw new ScriptRuntimeException($"SetShaderData: unsupported value type for \"{prop}\"");
-        }
+        var d = Get(instance);
+        if (!d.MaterialInstances.TryGetValue(material, out var inst) || inst == null)
+            throw new ScriptRuntimeException($"SetMaterialProperty: material \"{material.Name}\" is not applied to this object");
+        MaterialProps.Apply(inst, prop, value);
     }
 }
