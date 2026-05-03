@@ -1,15 +1,11 @@
-local input = InputService
 local mouse = input.GetMouse()
 local cam = game.CurrentCamera
 
--- Place the camera at a known position looking at the XY plane at z=0.
 local camDistance = 20
 cam.CFrame = CFrame.new(0, 0, -camDistance)
 
--- Derive playfield bounds from the camera's actual frustum at z=0.
 local function refreshBounds()
 	local v = cam:GetViewSize(camDistance)
-	-- Slight inset so paddles aren't flush against the screen edge.
 	local h = v.Y * 0.5 * 0.95
 	local w = v.X * 0.5 * 0.95
 	return w, h
@@ -33,14 +29,11 @@ local rightX = paddleX()
 
 local playerSpeed = 14
 
--- Difficulty scales every round: +1 step on a player score, -1 on a player loss.
--- Each derived value lerps between an "easy" and "hard" anchor based on level.
 local difficulty = 0
 local minDifficulty = -3
 local maxDifficulty = 6
 
 local function diffT()
-	-- Maps difficulty into 0..1 for easy linear interpolation.
 	local span = maxDifficulty - minDifficulty
 	return (difficulty - minDifficulty) / span
 end
@@ -49,16 +42,15 @@ local function lerp(a, b, t)
 	return a + (b - a) * t
 end
 
--- Per-round parameters (recomputed whenever difficulty changes).
 local aiSpeed, aiReactDelay, startSpeed, maxSpeed, speedupOnHit
 
 local function applyDifficulty()
 	local t = diffT()
-	aiSpeed       = lerp(2.5,  11.0, t)   -- AI tracking responsiveness
-	aiReactDelay  = lerp(0.45, 0.04, t)   -- seconds AI ignores incoming ball
-	startSpeed    = lerp(5.0,  13.0, t)   -- ball speed off a reset
-	maxSpeed      = lerp(14.0, 32.0, t)   -- per-rally cap
-	speedupOnHit  = lerp(1.02, 1.09, t)   -- ramp inside a rally
+	aiSpeed       = lerp(2.5,  11.0, t)
+	aiReactDelay  = lerp(0.45, 0.04, t)
+	startSpeed    = lerp(5.0,  13.0, t)
+	maxSpeed      = lerp(14.0, 32.0, t)
+	speedupOnHit  = lerp(1.02, 1.09, t)
 end
 applyDifficulty()
 
@@ -86,7 +78,7 @@ local lives = maxLives
 local aiLives = maxLives
 local lifeSize = Vector3.new(0.5, 0.5, 0.5)
 local lifeSpacing = 0.7
-local lifeZ = 8 -- meters behind the pong plane (z=0)
+local lifeZ = 8
 
 local function makeLifeRow()
 	local row = {}
@@ -109,7 +101,6 @@ local function refreshLifeCubes()
 	local h = v.Y * 0.5 * 0.95
 	local y = h - lifeSize.Y * 0.5 - 0.3
 
-	-- Player lives: top-left, growing right.
 	local leftStart = -w + lifeSize.X * 0.5 + 0.3
 	for i = 1, maxLives do
 		local c = lifeCubes[i]
@@ -117,7 +108,6 @@ local function refreshLifeCubes()
 		c.Render = i <= lives
 	end
 
-	-- AI lives: top-right, growing left.
 	local rightStart = w - lifeSize.X * 0.5 - 0.3
 	for i = 1, maxLives do
 		local c = aiLifeCubes[i]
@@ -132,9 +122,6 @@ local ballVel = Vector3.new(startSpeed, startSpeed * 0.4, 0)
 local leftY = 0
 local rightY = 0
 
--- Match-end blink state. While blinkTogglesLeft > 0, physics is paused and
--- the ball's Render flag flips every blinkInterval seconds. We want 3 full
--- off→on cycles (6 toggles) ending visible.
 local blinkTogglesLeft = 0
 local blinkTimer = 0
 local blinkInterval = 0.15
@@ -157,8 +144,6 @@ local function resetBall(dir)
 end
 
 local function startMatchReset(serveDir)
-	-- Hide the ball off-field and trigger the blink sequence. Physics is
-	-- frozen during the blink (the heartbeat skips its main body).
 	ballPos = Vector3.new(0, 0, 0)
 	ballVel = Vector3.new(0, 0, 0)
 	ball.Render = false
@@ -182,13 +167,11 @@ end
 RunService.Heartbeat:Connect(function(dt)
 	if dt > 0.05 then dt = 0.05 end
 
-	-- Recompute bounds every frame so window resizes / aspect changes work.
 	viewWidth, viewHeight = refreshBounds()
 	leftX = -paddleX()
 	rightX = paddleX()
 	refreshLifeCubes()
 
-	-- Match-reset blink: pause physics, flicker the ball, then resume.
 	if blinkTogglesLeft > 0 then
 		blinkTimer = blinkTimer + dt
 		while blinkTimer >= blinkInterval and blinkTogglesLeft > 0 do
@@ -204,10 +187,7 @@ RunService.Heartbeat:Connect(function(dt)
 		return
 	end
 
-	-- Player paddle: W/S or Up/Down, fall back to mouse Y
 	local move = 0
-	if input.IsKeyDown("W") or input.IsKeyDown("Up") then move = move + 1 end
-	if input.IsKeyDown("S") or input.IsKeyDown("Down") then move = move - 1 end
 
 	if move ~= 0 then
 		leftY = clampPaddle(leftY + move * playerSpeed * dt)
@@ -219,8 +199,6 @@ RunService.Heartbeat:Connect(function(dt)
 		end
 	end
 
-	-- AI paddle: lazy, delayed chase. Only tracks while ball heads toward it,
-	-- and uses a slow exponential lerp so fast/steep balls can outrun it.
 	if ballVel.X > 0 then
 		local timeToReach = (rightX - ballPos.X) / ballVel.X
 		if timeToReach > aiReactDelay then
@@ -228,11 +206,9 @@ RunService.Heartbeat:Connect(function(dt)
 		end
 	end
 
-	-- Integrate ball
 	local nx = ballPos.X + ballVel.X * dt
 	local ny = ballPos.Y + ballVel.Y * dt
 
-	-- Top/bottom walls
 	if ny > viewHeight - halfBall then
 		ny = viewHeight - halfBall
 		ballVel = Vector3.new(ballVel.X, -math.abs(ballVel.Y), 0)
@@ -241,7 +217,6 @@ RunService.Heartbeat:Connect(function(dt)
 		ballVel = Vector3.new(ballVel.X, math.abs(ballVel.Y), 0)
 	end
 
-	-- Left paddle collision (only when moving left)
 	if ballVel.X < 0
 		and nx - halfBall <= leftX + halfPaddleX
 		and nx + halfBall >= leftX - halfPaddleX
@@ -255,7 +230,6 @@ RunService.Heartbeat:Connect(function(dt)
 		ballVel = Vector3.new(math.abs(math.cos(angle)) * speed, math.sin(angle) * speed, 0)
 	end
 
-	-- Right paddle collision (only when moving right)
 	if ballVel.X > 0
 		and nx + halfBall >= rightX - halfPaddleX
 		and nx - halfBall <= rightX + halfPaddleX
@@ -268,14 +242,10 @@ RunService.Heartbeat:Connect(function(dt)
 		local angle = offset * 0.9
 		ballVel = Vector3.new(-math.abs(math.cos(angle)) * speed, math.sin(angle) * speed, 0)
 	end
-
-	-- Score: ball escaped past a paddle. Lives drive the match; difficulty
-	-- only changes when a whole match ends.
 	if nx < -viewWidth - 1 then
 		lives = lives - 1
 		refreshLifeCubes()
 		if lives <= 0 then
-			-- Player lost the match → AI gets weaker for the next one.
 			difficulty = math.max(minDifficulty, difficulty - 1)
 			applyDifficulty()
 			startMatchReset(1)
@@ -287,7 +257,6 @@ RunService.Heartbeat:Connect(function(dt)
 		aiLives = aiLives - 1
 		refreshLifeCubes()
 		if aiLives <= 0 then
-			-- Player won the match → AI gets faster, sharper, meaner.
 			difficulty = math.min(maxDifficulty, difficulty + 1)
 			applyDifficulty()
 			startMatchReset(-1)

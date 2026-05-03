@@ -37,4 +37,3 @@
 ---@field SetMaterialProperty fun(self:Shadable, material:Material, name:string, value:any)
 ---@field SetMaterialData fun(self:Shadable, material:Material, name:string, value:any)
 local Shadable = {}
-+
