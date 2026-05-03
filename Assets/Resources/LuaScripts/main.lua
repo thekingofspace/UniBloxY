@@ -64,3 +64,7 @@ RunService.Heartbeat:Connect(function(dt)
         end
     end
 end)
+
+print(game:ConvertToInstance("", function(name)
+    print(name)
+end))
