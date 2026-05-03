@@ -1,81 +1,56 @@
-local outerGroup = Instance.New("RenderGroup", game)
-outerGroup.Name = "OuterGroup"
+local root = Instance.New("BaseCube", game)
+root.Name = "Root"
+root.Size = Vector3.new(2,2,2)
+root.CFrame = CFrame.new(0,0,0)
 
-local center = Instance.New("BaseCube", outerGroup)
-center.Name = "Center"
-center.Size = Vector3.new(1.5, 1.5, 1.5)
-center.CFrame = CFrame.new(0, 5, 0)
+local mid = Instance.New("BaseCube", root)
+mid.Name = "Mid"
+mid.Size = Vector3.new(1.5,1.5,1.5)
+mid.CFrame = root.CFrame * CFrame.new(0,3,0)
 
-local innerGroup = Instance.New("RenderGroup", center)
-innerGroup.Name = "InnerGroup"
+local top = Instance.New("BaseCube", mid)
+top.Name = "Top"
+top.Size = Vector3.new(1,1,1)
+top.CFrame = mid.CFrame * CFrame.new(0,3,0)
 
-local overrideGroup = Instance.New("RenderGroup", center)
-overrideGroup.Name = "OverrideGroup"
-overrideGroup.OverrideParent = true
-overrideGroup.Render = false
+local blue = ShaderService.GetShader("Blue")
+local cubes = { root, mid, top }
+for _, c in ipairs(cubes) do c:AddShader(blue) end
 
-local radius = 4
-for i = 1, 7 do
-    local angle = (i - 1) * (2 * math.pi / 7)
-    local x = math.cos(angle) * radius
-    local z = math.sin(angle) * radius
-
-    local parent = (i % 2 == 1) and innerGroup or center
-    local cube = Instance.New("BaseCube", parent)
-    cube.Name = "Ring" .. i .. "_" .. (parent == innerGroup and "Inner" or "Outer")
-    cube.Size = Vector3.new(1, 1, 1)
-    cube.CFrame = CFrame.new(x, 5, z)
+local function setCells(cellsAcross)
+    for _, c in ipairs(cubes) do
+        c:SetShaderData(blue, "_Density", cellsAcross / c.Size.X)
+    end
 end
 
--- cube controlled by override group
-local overrideCube = Instance.New("BaseCube", overrideGroup)
-overrideCube.Name = "OverrideCube"
-overrideCube.Size = Vector3.new(1, 1, 1)
-overrideCube.CFrame = CFrame.new(0, 7, 0)
+local cellsStart, cellsEnd, shrinkTime = 8, 1, 15
+setCells(cellsStart)
+print("Shaders on root:", #root:ListShaders())
 
-outerGroup.Render = true
-innerGroup.Render = true
+local t = 0
+local phase = 1
 
-local spinAngle = 0
-local elapsed = 0
-local lastStage = -1
+root.Render = true
+mid.Render = true
+top.Render = true
 
 RunService.Heartbeat:Connect(function(dt)
-    spinAngle = (spinAngle + dt * 60) % 360
-    center.CFrame = CFrame.new(0, 5, 0, 0, spinAngle, 0)
+    t = t +dt
 
-    elapsed = elapsed + dt
-    local phase = elapsed % 10
-    local stage
-    if phase < 3 then stage = 0
-    elseif phase < 5 then stage = 1
-    elseif phase < 7 then stage = 2
-    else stage = 3 end
+    local k = math.min(t / shrinkTime, 1)
+    setCells(cellsStart + (cellsEnd - cellsStart) * k)
 
-    if stage ~= lastStage then
-        lastStage = stage
+    if phase == 1 then
+        root.CFrame = root.CFrame * CFrame.new(0, 0, dt * 2)
+        if t >= 10 then
+            phase = 2
+        end
+    elseif phase == 2 then
+        mid.CFrame = mid.CFrame * CFrame.new(dt * 2, 0, 0)
 
-        overrideGroup.Render = false
-
-        if stage == 0 then
-            outerGroup.Render = true
-            innerGroup.Render = true
-            print("[stage 0] both on")
-
-        elseif stage == 1 then
-            innerGroup.Render = false
-            print("[stage 1] inner off")
-
-        elseif stage == 2 then
-            outerGroup.Render = false
-            innerGroup.Render = false
-            overrideGroup.Render = true
-            print("[stage 2] override active")
-
-        else
-            outerGroup.Render = true
-            innerGroup.Render = true
-            print("[stage 3] both on again")
+        if t >= 20 then
+            phase = 1
+            t = 0
         end
     end
 end)

@@ -1,7 +1,7 @@
 using MoonSharp.Interpreter;
 using UnityEngine;
 
-public class BaseCube : Renderable
+public class BaseCube : Shadable
 {
     public override string ClassName => "BaseCube";
 
@@ -75,6 +75,7 @@ public class BaseCube : Renderable
     protected override void OnRenderStateChanged(LuaInstance instance)
     {
         SyncRender(instance, (State)instance.UserState);
+        base.OnRenderStateChanged(instance);
     }
 
     public override void OnEnterScene(LuaInstance instance)

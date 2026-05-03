@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\gageh\\\\My project \\(6\\)\" -Directory -Recurse | Select-Object -First 30 | ForEach-Object { $_.FullName })",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\gageh\\\\My project \\(6\\)\\\\Assets\\\\Scripts\" -Recurse -File | Where-Object { $_.Extension -eq \".cs\" } | ForEach-Object { $_.FullName })",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\gageh\\\\My project \\(6\\)\\\\Assets\" -Recurse -File | Where-Object { $_.Extension -match '\\\\.\\(mat|shader|material\\)$' } | ForEach-Object { $_.FullName })",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\gageh\\\\My project \\(6\\)\\\\Assets\\\\Resources\\\\LuaScripts\" -Recurse -File | ForEach-Object { $_.FullName })"
+    ]
+  }
+}
