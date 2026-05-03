@@ -22,12 +22,17 @@ public abstract class Renderable : LuaInstanceClass
         var node = instance;
         while (node != null)
         {
-            if (node.ClassDef is Renderable r && !r.GetRender(node))
-                return false;
+            if (node.ClassDef is Renderable r)
+            {
+                if (!r.GetRender(node)) return false;
+                if (r.BlocksParentRenderChain(node)) return true;
+            }
             node = node.Parent;
         }
         return true;
     }
+
+    protected virtual bool BlocksParentRenderChain(LuaInstance instance) => false;
 
     protected virtual void OnRenderStateChanged(LuaInstance instance) { }
 
