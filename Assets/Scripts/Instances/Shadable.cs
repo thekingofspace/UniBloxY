@@ -11,6 +11,10 @@ public abstract class Shadable : Renderable
         public readonly List<Material> ShaderInstances = new();
         public readonly List<LuaMaterial> Materials = new();
         public readonly Dictionary<LuaMaterial, Material> MaterialInstances = new();
+        public Material[] OriginalMaterials;
+        public bool OriginalCaptured;
+        public bool CastShadow = true;
+        public bool ReceiveShadow = true;
     }
 
     private static readonly ConditionalWeakTable<LuaInstance, ShadableData> data = new();
@@ -21,10 +25,20 @@ public abstract class Shadable : Renderable
     protected override void OnRenderStateChanged(LuaInstance instance)
     {
         ApplyAll(instance);
+        ApplyShadowFlags(instance);
     }
 
     public override bool TryGetProperty(LuaInstance instance, string key, out DynValue value)
     {
+        switch (key)
+        {
+            case "CastShadow":
+                value = DynValue.NewBoolean(Get(instance).CastShadow);
+                return true;
+            case "ReceiveShadow":
+                value = DynValue.NewBoolean(Get(instance).ReceiveShadow);
+                return true;
+        }
         switch (key)
         {
             case "AddShader":
@@ -104,6 +118,39 @@ public abstract class Shadable : Renderable
         return base.TryGetProperty(instance, key, out value);
     }
 
+    public override bool TrySetProperty(LuaInstance instance, string key, DynValue value)
+    {
+        switch (key)
+        {
+            case "CastShadow":
+                if (value.Type != DataType.Boolean)
+                    throw new ScriptRuntimeException("CastShadow must be a boolean");
+                Get(instance).CastShadow = value.Boolean;
+                ApplyShadowFlags(instance);
+                return true;
+            case "ReceiveShadow":
+                if (value.Type != DataType.Boolean)
+                    throw new ScriptRuntimeException("ReceiveShadow must be a boolean");
+                Get(instance).ReceiveShadow = value.Boolean;
+                ApplyShadowFlags(instance);
+                return true;
+        }
+        return base.TrySetProperty(instance, key, value);
+    }
+
+    private static void ApplyShadowFlags(LuaInstance instance)
+    {
+        var go = instance.UnityObject;
+        if (go == null) return;
+        var renderer = go.GetComponent<Renderer>();
+        if (renderer == null) return;
+        var d = Get(instance);
+        renderer.shadowCastingMode = d.CastShadow
+            ? UnityEngine.Rendering.ShadowCastingMode.On
+            : UnityEngine.Rendering.ShadowCastingMode.Off;
+        renderer.receiveShadows = d.ReceiveShadow;
+    }
+
     private static LuaShader ResolveShader(CallbackArguments args, int index)
     {
         if (args.Count <= index) throw new ScriptRuntimeException("Shader argument missing");
@@ -174,8 +221,18 @@ public abstract class Shadable : Renderable
         if (renderer == null) return;
 
         var d = Get(instance);
+        if (!d.OriginalCaptured)
+        {
+            d.OriginalMaterials = renderer.sharedMaterials;
+            d.OriginalCaptured = true;
+        }
+
         var total = d.ShaderInstances.Count + d.Materials.Count;
-        if (total == 0) return;
+        if (total == 0)
+        {
+            renderer.sharedMaterials = d.OriginalMaterials ?? System.Array.Empty<Material>();
+            return;
+        }
 
         var mats = new Material[total];
         for (int i = 0; i < d.ShaderInstances.Count; i++)

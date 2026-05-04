@@ -1,11 +1,11 @@
-Shader "Custom/Default"
+Shader "Custom/InkContrast"
 {
     Properties
     {
-        _Color ("Color", Color) = (0.8, 0.8, 0.8, 1)
-        _MainTex ("Main Texture", 2D) = "white" {}
-        _Smoothness ("Smoothness", Range(0,1)) = 0.0
-        _Metallic ("Metallic", Range(0,1)) = 0.0
+        _Color     ("Tint",       Color)         = (1, 1, 1, 1)
+        _MainTex   ("Main Texture", 2D)          = "white" {}
+        _Threshold ("Black Threshold", Range(0, 1)) = 0.5
+        _Softness  ("Edge Softness",   Range(0, 0.5)) = 0.02
     }
     SubShader
     {
@@ -26,9 +26,6 @@ Shader "Custom/Default"
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
             #pragma multi_compile _ _FORWARD_PLUS
-            #pragma multi_compile _ LIGHTMAP_ON
-            #pragma multi_compile _ DIRLIGHTMAP_COMBINED
-            #pragma multi_compile_fog
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -37,8 +34,8 @@ Shader "Custom/Default"
             CBUFFER_START(UnityPerMaterial)
                 float4 _Color;
                 float4 _MainTex_ST;
-                float  _Smoothness;
-                float  _Metallic;
+                float  _Threshold;
+                float  _Softness;
             CBUFFER_END
 
             TEXTURE2D(_MainTex);
@@ -57,31 +54,39 @@ Shader "Custom/Default"
                 float3 positionWS : TEXCOORD0;
                 float3 normalWS   : TEXCOORD1;
                 float2 uv         : TEXCOORD2;
-                float  fogFactor  : TEXCOORD3;
             };
 
             V vert(A IN)
             {
                 V OUT;
                 VertexPositionInputs vp = GetVertexPositionInputs(IN.positionOS.xyz);
-                VertexNormalInputs vn = GetVertexNormalInputs(IN.normalOS);
+                VertexNormalInputs   vn = GetVertexNormalInputs(IN.normalOS);
                 OUT.positionCS = vp.positionCS;
                 OUT.positionWS = vp.positionWS;
                 OUT.normalWS   = vn.normalWS;
                 OUT.uv         = TRANSFORM_TEX(IN.uv, _MainTex);
-                OUT.fogFactor  = ComputeFogFactor(vp.positionCS.z);
                 return OUT;
             }
 
             half4 frag(V IN) : SV_Target
             {
-                float3 N = normalize(IN.normalWS);
                 float4 tex = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv);
-                float3 albedo = _Color.rgb * tex.rgb;
+                float lum = dot(tex.rgb, float3(0.299, 0.587, 0.114));
 
+                // Pixels below the threshold are crushed to pitch black,
+                // pixels above are kept (and tinted by _Color).
+                float keep = smoothstep(_Threshold - _Softness,
+                                        _Threshold + _Softness, lum);
+
+                float3 albedo = tex.rgb * _Color.rgb * keep;
+
+                float3 N = normalize(IN.normalWS);
                 float4 shadowCoord = TransformWorldToShadowCoord(IN.positionWS);
                 Light mainLight = GetMainLight(shadowCoord);
-                float3 lighting = mainLight.color * (saturate(dot(N, mainLight.direction)) * mainLight.shadowAttenuation * mainLight.distanceAttenuation);
+                float3 lighting = mainLight.color *
+                    saturate(dot(N, mainLight.direction)) *
+                    mainLight.shadowAttenuation *
+                    mainLight.distanceAttenuation;
 
                 #if defined(_ADDITIONAL_LIGHTS) || defined(_ADDITIONAL_LIGHTS_VERTEX) || USE_FORWARD_PLUS
                     InputData inputData = (InputData)0;
@@ -91,15 +96,20 @@ Shader "Custom/Default"
                     uint pixelLightCount = GetAdditionalLightsCount();
                     LIGHT_LOOP_BEGIN(pixelLightCount)
                         Light l = GetAdditionalLight(lightIndex, IN.positionWS);
-                        lighting += l.color * (saturate(dot(N, l.direction)) * l.distanceAttenuation * l.shadowAttenuation);
+                        lighting += l.color *
+                            saturate(dot(N, l.direction)) *
+                            l.distanceAttenuation *
+                            l.shadowAttenuation;
                     LIGHT_LOOP_END
                 #endif
 
                 float3 ambient = SampleSH(N) * 0.6 + 0.15;
-                float3 final = albedo * (lighting + ambient);
 
-                final = MixFog(final, IN.fogFactor);
-                return half4(final, _Color.a * tex.a);
+                // Multiplying lighting by `keep` means the dark pixels stay
+                // pitch black even where lights or ambient would normally
+                // brighten them — they don't reflect anything.
+                float3 final = albedo * (lighting + ambient) * keep;
+                return half4(final, 1);
             }
             ENDHLSL
         }
@@ -142,59 +152,6 @@ Shader "Custom/Default"
             }
 
             half4 ShadowFrag(V IN) : SV_Target { return 0; }
-            ENDHLSL
-        }
-
-        Pass
-        {
-            Name "DepthOnly"
-            Tags { "LightMode"="DepthOnly" }
-
-            ZWrite On
-            ColorMask 0
-
-            HLSLPROGRAM
-            #pragma vertex DepthVert
-            #pragma fragment DepthFrag
-
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-
-            struct A { float4 positionOS : POSITION; };
-            struct V { float4 positionCS : SV_POSITION; };
-
-            V DepthVert(A IN) { V o; o.positionCS = TransformObjectToHClip(IN.positionOS.xyz); return o; }
-            half4 DepthFrag(V IN) : SV_Target { return 0; }
-            ENDHLSL
-        }
-
-        Pass
-        {
-            Name "DepthNormals"
-            Tags { "LightMode"="DepthNormals" }
-
-            ZWrite On
-
-            HLSLPROGRAM
-            #pragma vertex DNVert
-            #pragma fragment DNFrag
-
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-
-            struct A { float4 positionOS : POSITION; float3 normalOS : NORMAL; };
-            struct V { float4 positionCS : SV_POSITION; float3 normalWS : TEXCOORD0; };
-
-            V DNVert(A IN)
-            {
-                V o;
-                o.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
-                o.normalWS = TransformObjectToWorldNormal(IN.normalOS);
-                return o;
-            }
-
-            half4 DNFrag(V IN) : SV_Target
-            {
-                return half4(normalize(IN.normalWS) * 0.5 + 0.5, 0);
-            }
             ENDHLSL
         }
     }

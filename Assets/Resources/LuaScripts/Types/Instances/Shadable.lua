@@ -17,7 +17,7 @@
 ---@field Texture Texture
 ---@field Tiling Vector2
 ---@field Offset Vector2
----@field Repeat number
+---@field TileSize Vector2|number
 ---@field Smoothness number
 ---@field Metallic number
 ---@field RenderQueue integer
@@ -27,6 +27,8 @@
 ---@field DisableKeyword fun(self:Material, keyword:string)
 
 ---@class Shadable : Renderable
+---@field CastShadow boolean If true (default) the object casts a shadow.
+---@field ReceiveShadow boolean If true (default) the object receives shadows from other casters.
 ---@field AddShader fun(self:Shadable, shader:Shader)
 ---@field RemoveShader fun(self:Shadable, shader:Shader):boolean
 ---@field ListShaders fun(self:Shadable):Shader[]

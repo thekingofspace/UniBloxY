@@ -10,7 +10,7 @@ Shader "Custom/Blue"
     }
     SubShader
     {
-        Tags { "RenderType"="Opaque" "RenderPipelineMask"="UniversalPipelineMask" }
+        Tags { "RenderType"="Opaque" "RenderPipeline"="UniversalPipeline" }
         LOD 100
 
         Pass
@@ -22,10 +22,11 @@ Shader "Custom/Blue"
             #pragma vertex vert
             #pragma fragment frag
 
-            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS
-            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile _ _SHADOWS_SOFT
-            #pragma multi_compile_fragment _ _ADDITIONAL_LIGHTS
+            #pragma multi_compile_fragment _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
+            #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
+            #pragma multi_compile _ _FORWARD_PLUS
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -97,7 +98,19 @@ Shader "Custom/Blue"
                 float4 shadowCoord = TransformWorldToShadowCoord(IN.positionWS);
                 Light mainLight = GetMainLight(shadowCoord);
                 float ndotl = saturate(dot(N, mainLight.direction));
-                float3 lighting = mainLight.color * ndotl * mainLight.shadowAttenuation;
+                float3 lighting = mainLight.color * ndotl * mainLight.shadowAttenuation * mainLight.distanceAttenuation;
+
+                #if defined(_ADDITIONAL_LIGHTS) || defined(_ADDITIONAL_LIGHTS_VERTEX) || USE_FORWARD_PLUS
+                    InputData inputData = (InputData)0;
+                    inputData.positionWS = IN.positionWS;
+                    inputData.normalWS = N;
+                    inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(IN.positionHCS);
+                    uint pixelLightCount = GetAdditionalLightsCount();
+                    LIGHT_LOOP_BEGIN(pixelLightCount)
+                        Light l = GetAdditionalLight(lightIndex, IN.positionWS);
+                        lighting += l.color * saturate(dot(N, l.direction)) * l.distanceAttenuation * l.shadowAttenuation;
+                    LIGHT_LOOP_END
+                #endif
 
                 float3 ambient = SampleSH(N) * 0.6 + 0.15;
 

@@ -72,17 +72,39 @@ public class LuaMaterial
         }
     }
 
-    public float Repeat
+    // Accepts either a number (uniform scale on both axes) or a Vector2
+    // (per-axis). Stored / read back as a Vector2.
+    public object TileSize
     {
         get
         {
-            if (Source == null) return 1f;
+            if (Source == null) return LuaVector2.One;
             var t = Source.HasProperty("_MainTex") ? Source.GetTextureScale("_MainTex") : Vector2.one;
-            return t.x;
+            return new LuaVector2(t.x, t.y);
         }
         set
         {
-            var t = new Vector2(value, value);
+            Vector2 t;
+            switch (value)
+            {
+                case null:
+                    return;
+                case LuaVector2 v2:
+                    t = new Vector2(v2.X, v2.Y);
+                    break;
+                case double d:
+                    t = new Vector2((float)d, (float)d);
+                    break;
+                case float f:
+                    t = new Vector2(f, f);
+                    break;
+                case int i:
+                    t = new Vector2(i, i);
+                    break;
+                default:
+                    throw new ScriptRuntimeException(
+                        "Material.TileSize must be a number or a Vector2");
+            }
             Apply(m => { if (m.HasProperty("_MainTex")) m.SetTextureScale("_MainTex", t); });
         }
     }

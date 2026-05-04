@@ -1,4 +1,4 @@
-local mouse = input.GetMouse()
+local mouse = InputService.GetMouse()
 local cam = game.CurrentCamera
 
 local camDistance = 20
@@ -69,9 +69,26 @@ ball.Size = ballSize
 ball.CFrame = CFrame.new(0, 0, 0)
 ball.Render = true
 
-local blueShader = ShaderService.GetShader("Blue")
-ball:AddShader(blueShader)
-ball:SetShaderData(blueShader, "_Density", 4 / ballSize.X)
+
+
+local sampleMat = ShaderService.GetMaterial("SampleCheckered")
+sampleMat.TileSize = Vector2.new(2, 8)
+left:AddMaterial(sampleMat)
+
+
+local checker = ShaderService.GetTexture("Checker")
+local rightMat = ShaderService.CreateMaterial("Default", "RightPaddleMat")
+rightMat.Texture = checker
+right:AddMaterial(rightMat)
+rightMat.Color = Color3.fromHex("#88C0FF")
+
+local inkMat = ShaderService.CreateMaterial("InkContrast", "BallInkMat")
+inkMat.Texture = checker
+inkMat.TileSize = Vector2.new(2, 2)
+inkMat:Set("_Threshold", 0.5)
+inkMat:Set("_Softness", 0.04)
+inkMat.Color = Color3.fromHex("#FFE070")
+ball:AddMaterial(inkMat)
 
 local maxLives = 3
 local lives = maxLives
@@ -80,20 +97,44 @@ local lifeSize = Vector3.new(0.5, 0.5, 0.5)
 local lifeSpacing = 0.7
 local lifeZ = 8
 
-local function makeLifeRow()
+local function makeHighlightMat(name, fillHex, outlineHex)
+	local m = ShaderService.CreateMaterial("Highlight", name)
+	m:Set("_FillColor", Color3.fromHex(fillHex))
+	m:Set("_OutlineColor", Color3.fromHex(outlineHex))
+	m:Set("_FillTransparency", 0.3)
+	m:Set("_OutlineTransparency", 0.0)
+	m:Set("_OutlineWidth", 0.05)
+	return m
+end
+
+local playerLifeMat = makeHighlightMat("PlayerLifeHL", "#2090FF", "#FFFFFF")
+local aiLifeMat     = makeHighlightMat("AILifeHL",     "#E03030", "#FFFFFF")
+
+local function makeLifeRow(mat)
 	local row = {}
 	for i = 1, maxLives do
 		local c = Instance.New("BaseCube", game)
 		c.Name = "Life" .. i
 		c.Size = lifeSize
 		c.Render = true
-		row[i] = c
+		c:AddMaterial(mat)
+		row[i] = { cube = c, mat = mat, lit = true }
 	end
 	return row
 end
 
-local lifeCubes = makeLifeRow()
-local aiLifeCubes = makeLifeRow()
+local lifeCubes = makeLifeRow(playerLifeMat)
+local aiLifeCubes = makeLifeRow(aiLifeMat)
+
+local function setLit(entry, lit)
+	if entry.lit == lit then return end
+	entry.lit = lit
+	if lit then
+		entry.cube:AddMaterial(entry.mat)
+	else
+		entry.cube:RemoveMaterial(entry.mat)
+	end
+end
 
 local function refreshLifeCubes()
 	local v = cam:GetViewSize(camDistance + lifeZ)
@@ -103,16 +144,16 @@ local function refreshLifeCubes()
 
 	local leftStart = -w + lifeSize.X * 0.5 + 0.3
 	for i = 1, maxLives do
-		local c = lifeCubes[i]
-		c.CFrame = CFrame.new(leftStart + (i - 1) * lifeSpacing, y, lifeZ)
-		c.Render = i <= lives
+		local e = lifeCubes[i]
+		e.cube.CFrame = CFrame.new(leftStart + (i - 1) * lifeSpacing, y, lifeZ)
+		setLit(e, i <= lives)
 	end
 
 	local rightStart = w - lifeSize.X * 0.5 - 0.3
 	for i = 1, maxLives do
-		local c = aiLifeCubes[i]
-		c.CFrame = CFrame.new(rightStart - (i - 1) * lifeSpacing, y, lifeZ)
-		c.Render = i <= aiLives
+		local e = aiLifeCubes[i]
+		e.cube.CFrame = CFrame.new(rightStart - (i - 1) * lifeSpacing, y, lifeZ)
+		setLit(e, i <= aiLives)
 	end
 end
 refreshLifeCubes()
