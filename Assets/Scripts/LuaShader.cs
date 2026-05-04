@@ -4,6 +4,7 @@ using UnityEngine;
 [MoonSharpUserData]
 public class LuaShader
 {
+    public string ClassName => "Shader";
     public string Name { get; }
     public Shader Shader { get; }
 

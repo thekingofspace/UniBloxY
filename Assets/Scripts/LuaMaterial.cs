@@ -5,6 +5,7 @@ using UnityEngine;
 [MoonSharpUserData]
 public class LuaMaterial
 {
+    public string ClassName => "Material";
     public string Name { get; }
     [MoonSharpHidden] public Material Source { get; }
     [MoonSharpHidden] private readonly List<Material> instances = new();

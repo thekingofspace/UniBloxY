@@ -1,9 +1,11 @@
 ---@meta
 
 ---@class Shader
+---@field ClassName "Shader"
 ---@field Name string
 
 ---@class Texture
+---@field ClassName "Texture"
 ---@field Name string
 ---@field Width integer
 ---@field Height integer
@@ -11,6 +13,7 @@
 ---@field FilterMode string
 
 ---@class Material
+---@field ClassName "Material"
 ---@field Name string
 ---@field Shader Shader
 ---@field Color Color3

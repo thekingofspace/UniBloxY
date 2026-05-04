@@ -4,6 +4,7 @@ using UnityEngine;
 [MoonSharpUserData]
 public class LuaTexture
 {
+    public string ClassName => "Texture";
     public string Name { get; }
     [MoonSharpHidden] public Texture Texture { get; }
 

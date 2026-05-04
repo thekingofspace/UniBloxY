@@ -1,5 +1,8 @@
 local mouse = InputService.GetMouse()
 local cam = game.CurrentCamera
+if ShaderService.AssetsLoaded ~= true then
+	ShaderService.AssetsFinishedLoading:Wait()
+end
 
 local camDistance = 20
 cam.CFrame = CFrame.new(0, 0, -camDistance)
@@ -127,6 +130,7 @@ local lifeCubes = makeLifeRow(playerLifeMat)
 local aiLifeCubes = makeLifeRow(aiLifeMat)
 
 local function setLit(entry, lit)
+	lit = not lit
 	if entry.lit == lit then return end
 	entry.lit = lit
 	if lit then
