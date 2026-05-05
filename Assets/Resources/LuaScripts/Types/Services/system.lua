@@ -18,7 +18,6 @@
 ---@field tempPath fun():string
 ---@field frameCount fun():integer
 ---@field deltaTime fun():number
----@field quit fun():nil
 System = {}
 
 return System

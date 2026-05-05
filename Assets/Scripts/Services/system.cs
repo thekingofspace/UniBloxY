@@ -45,8 +45,6 @@ public class SystemService : LuaService
         sys["frameCount"] = (Func<int>)(() => Time.frameCount);
         sys["deltaTime"] = (Func<float>)(() => Time.deltaTime);
 
-        sys["quit"] = (Action)(() => Application.Quit());
-
         script.Globals["System"] = sys;
     }
 }
