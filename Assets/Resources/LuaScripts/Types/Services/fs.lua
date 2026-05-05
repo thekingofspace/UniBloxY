@@ -14,7 +14,6 @@
 ---@field list fun(path:string):string[]
 ---@field size fun(path:string):integer
 ---@field join fun(...:string):string
----@field root fun():string
 fs = {}
 
 return fs

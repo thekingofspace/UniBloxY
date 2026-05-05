@@ -19,6 +19,6 @@
 ---@field frameCount fun():integer
 ---@field deltaTime fun():number
 ---@field quit fun():nil
-system = {}
+System = {}
 
-return system
+return System

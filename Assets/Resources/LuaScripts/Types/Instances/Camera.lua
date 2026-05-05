@@ -26,7 +26,7 @@ function Camera:GetViewSize(distance) end
 ---  mode = "fullscreen"  → exclusive fullscreen
 ---  mode = "windowed"    → bordered window (pass width, height to size it)
 ---  mode = "maximized"   → maximized window (Windows only)
----@param mode string
+---@param mode "borderless" | "fullscreen" | "windowed" | "maximized"
 ---@param width? integer
 ---@param height? integer
 function Camera:SetFullScreen(mode, width, height) end

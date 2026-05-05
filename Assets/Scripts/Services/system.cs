@@ -47,6 +47,6 @@ public class SystemService : LuaService
 
         sys["quit"] = (Action)(() => Application.Quit());
 
-        script.Globals["system"] = sys;
+        script.Globals["System"] = sys;
     }
 }

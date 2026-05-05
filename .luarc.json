@@ -8,7 +8,7 @@
     ]
   },
   "runtime": {
-    "version": "Lua 5.4",
+    "version": "Lua 5.2",
     "path": [
       "?.lua",
       "?/init.lua",

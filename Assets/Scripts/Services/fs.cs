@@ -87,12 +87,19 @@ public class FsService : LuaService
         fs["join"] = DynValue.NewCallback((ctx, args) =>
         {
             string acc = "";
+
             for (int i = 0; i < args.Count; i++)
-                acc = string.IsNullOrEmpty(acc) ? args[i].String : Path.Combine(acc, args[i].String);
+            {
+                var part = args[i].CastToString();
+                if (string.IsNullOrEmpty(part)) continue;
+
+                acc = string.IsNullOrEmpty(acc)
+                    ? part
+                    : acc + "/" + part;
+            }
+
             return DynValue.NewString(acc);
         });
-
-        fs["root"] = (Func<string>)(() => Application.persistentDataPath);
 
         script.Globals["fs"] = fs;
     }
