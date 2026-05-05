@@ -2,7 +2,9 @@ local safe_req = require
 
 local Tests = {
 	["Example"] = "Example",
-	["RunService"] = "RunServiceTest"
+	["RunService"] = "RunServiceTest",
+	["System"] = "System",
+	["Serde"] = "Serde"
 }
 
 ---@param path string
