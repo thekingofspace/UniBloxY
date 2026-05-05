@@ -1,5 +1,7 @@
 # UniBloxY
 
+**Discord:** https://discord.gg/5D2kXbgbDh
+
 ## Overview
 
 UniBloxY is a hybrid Lua + C# framework built in Unity. It is structured to support both low-level scripting through Lua and engine-level extensions through C#.
