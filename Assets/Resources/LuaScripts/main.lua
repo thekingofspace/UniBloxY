@@ -12,6 +12,8 @@ local Tests = {
 	["BaseCube"]      = "BaseCube",
 	["RenderGroup"]   = "RenderGroup",
 	["Shadable"]      = "Shadable",
+	["GUI"]           = "GUI",
+	["StyledGUI"]     = "StyledGUI",
 	["Clone"]         = "Clone",
 	["Lights"]        = "Lights",
 	["Lighting"]      = "Lighting",
@@ -19,6 +21,8 @@ local Tests = {
 	["AssetService"]  = "AssetService",
 	["ShaderService"] = "ShaderService",
 	["InputService"]  = "InputService",
+	["ListenerService"] = "ListenerService",
+	["MouseEnter"]    = "MouseEnter",
 	["RunService"]    = "RunServiceTest",
 	["System"]        = "System",
 	["Fs"]            = "Fs",
@@ -45,6 +49,9 @@ local thread = coroutine.running()
 local conn = RunService.Heartbeat:Connect(function(dt)
 	Wait = Wait+dt
 	if waitTill ~= nil and waitTill <= Wait then
+		-- Clear before resuming so a test that yields again mid-run (e.g. via
+		-- yieldFrames) isn't woken up a second time by this stale deadline.
+		waitTill = nil
 		coroutine.resume(thread)
 	end
 end)

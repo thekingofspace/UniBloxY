@@ -6,3 +6,6 @@
 ---@field PointLight PointLight
 ---@field Spotlight Spotlight
 ---@field AreaLight AreaLight
+---@field Frame Frame
+---@field TextLabel TextLabel
+---@field ImageLabel ImageLabel

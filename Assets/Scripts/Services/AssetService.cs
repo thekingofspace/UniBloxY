@@ -10,6 +10,8 @@ public class AssetService : LuaService
     private readonly Dictionary<string, LuaShader> shaderCache = new();
     private readonly Dictionary<string, LuaMaterial> materialCache = new();
     private readonly Dictionary<string, LuaTexture> textureCache = new();
+    private readonly Dictionary<string, LuaImage> imageCache = new();
+    private readonly Dictionary<string, LuaFont> fontCache = new();
 
     private Signal shaderLoadedSignal;
     private Signal assetLoadedSignal;
@@ -22,6 +24,8 @@ public class AssetService : LuaService
         UserData.RegisterType<LuaShader>();
         UserData.RegisterType<LuaMaterial>();
         UserData.RegisterType<LuaTexture>();
+        UserData.RegisterType<LuaImage>();
+        UserData.RegisterType<LuaFont>();
 
         shaderLoadedSignal = new Signal(script, "AssetService.ShaderLoaded");
         assetLoadedSignal = new Signal(script, "AssetService.AssetLoaded");
@@ -99,6 +103,54 @@ public class AssetService : LuaService
         return wrapper;
     }
 
+    public LuaImage GetImage(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+            throw new ScriptRuntimeException("AssetService:GetImage requires an image name");
+
+        if (imageCache.TryGetValue(name, out var existing))
+            return existing;
+
+        // Prefer Sprite assets so Image components can use them directly;
+        // fall back to a Texture2D wrapped in a runtime sprite.
+        var sprite = Resources.Load<Sprite>("Images/" + name);
+        LuaImage wrapper;
+        if (sprite != null)
+        {
+            wrapper = new LuaImage(name, sprite);
+        }
+        else
+        {
+            var tex = Resources.Load<Texture2D>("Images/" + name);
+            if (tex == null)
+                throw new ScriptRuntimeException($"AssetService: image \"{name}\" not found at Resources/Images/{name}");
+            wrapper = new LuaImage(name, tex);
+        }
+
+        imageCache[name] = wrapper;
+        assetLoadedSignal.Fire(name);
+        return wrapper;
+    }
+
+    public LuaFont GetFont(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+            throw new ScriptRuntimeException("AssetService:GetFont requires a font name");
+
+        if (fontCache.TryGetValue(name, out var existing))
+            return existing;
+
+        var font = Resources.Load<Font>("Fonts/" + name);
+        if (font == null) font = Resources.GetBuiltinResource<Font>(name);
+        if (font == null)
+            throw new ScriptRuntimeException($"AssetService: font \"{name}\" not found at Resources/Fonts/{name}");
+
+        var wrapper = new LuaFont(name, font);
+        fontCache[name] = wrapper;
+        assetLoadedSignal.Fire(name);
+        return wrapper;
+    }
+
     private Table BuildTable(Script script)
     {
         var table = new Table(script);
@@ -107,6 +159,8 @@ public class AssetService : LuaService
         table["Get"] = (Func<string, LuaShader>)GetShader;
         table["GetMaterial"] = (Func<string, LuaMaterial>)GetMaterial;
         table["GetTexture"] = (Func<string, LuaTexture>)GetTexture;
+        table["GetImage"] = (Func<string, LuaImage>)GetImage;
+        table["GetFont"] = (Func<string, LuaFont>)GetFont;
 
         table["CreateMaterial"] = DynValue.NewCallback((ctx, args) =>
         {
