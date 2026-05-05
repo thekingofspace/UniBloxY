@@ -2,12 +2,19 @@ local safe_req = require
 
 local Tests = {
 	["Example"] = "Example",
+	["RunService"] = "RunServiceTest"
 }
 
 ---@param path string
 ---@return boolean, string
 require = function(path)
-	return pcall(safe_req, path)
+	local suc, err = pcall(safe_req, path)
+
+	if type(err) == "function" then
+		suc, err = pcall(err)
+	end
+
+	return suc, err
 end
 
 local Wait = 0
