@@ -28,6 +28,37 @@ public abstract class Shadable : Renderable
         ApplyShadowFlags(instance);
     }
 
+    public override void CopyState(LuaInstance source, LuaInstance target)
+    {
+        base.CopyState(source, target);
+        var src = Get(source);
+        var dst = Get(target);
+        dst.CastShadow = src.CastShadow;
+        dst.ReceiveShadow = src.ReceiveShadow;
+
+        // Re-add shaders. Each gets its own runtime Material instance (so
+        // per-object property edits don't bleed between the original and clone).
+        for (int i = 0; i < src.Shaders.Count; i++)
+        {
+            var shader = src.Shaders[i];
+            dst.Shaders.Add(shader);
+            var srcMat = src.ShaderInstances[i];
+            // Copy via Material(Material) so all SetFloat/SetVector/SetTexture
+            // overrides applied through SetShaderData come along.
+            dst.ShaderInstances.Add(srcMat != null ? new Material(srcMat) : new Material(shader.Shader));
+        }
+
+        // Re-add materials. CloneInstance on the LuaMaterial gives us a
+        // sibling instance that already carries the source's per-object
+        // property overrides.
+        foreach (var mat in src.Materials)
+        {
+            dst.Materials.Add(mat);
+            src.MaterialInstances.TryGetValue(mat, out var srcInst);
+            dst.MaterialInstances[mat] = mat.CloneInstance(srcInst);
+        }
+    }
+
     public override bool TryGetProperty(LuaInstance instance, string key, out DynValue value)
     {
         switch (key)

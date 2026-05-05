@@ -491,13 +491,42 @@ public class LuaInstance
 
     public LuaInstance Clone()
     {
+        // The Clonable flag only gates the *root* of a Clone. Once we start
+        // cloning, every descendant gets duplicated so the resulting subtree
+        // is a faithful, reusable copy of the original.
+        if (ClassDef == null || !ClassDef.Clonable)
+            throw new ScriptRuntimeException($"{className} \"{name}\" cannot be cloned");
+        return CloneInternal();
+    }
+
+    private LuaInstance CloneInternal()
+    {
         var copy = new LuaInstance(script, className, name);
         copy.ClassDef = ClassDef;
+        copy.Moveable = Moveable;
+        copy.Indestructible = Indestructible;
+        copy.Reparentable = Reparentable;
         ClassDef?.Initialize(copy);
+        ClassDef?.CopyState(this, copy);
         foreach (var kv in attributes) copy.attributes[kv.Key] = kv.Value;
+
+        // Copy any plain Lua-side fields the user set on the source's table
+        // (e.g. `cube.MyTag = "x"`) that weren't claimed by the class def.
+        // Skip keys the new table already populated as part of the API surface.
+        foreach (var pair in table.Pairs)
+        {
+            var existing = copy.table.RawGet(pair.Key);
+            if (existing != null && existing.Type != DataType.Nil) continue;
+            // Don't shallow-copy nested instance tables — children get cloned below.
+            if (pair.Value.Type == DataType.Table && pair.Value.Table.RawGet("__instance").Type == DataType.UserData) continue;
+            copy.table.Set(pair.Key, pair.Value);
+        }
+
         for (int i = 0; i < children.Count; i++)
         {
-            var childCopy = children[i].Clone();
+            var child = children[i];
+            if (child.ClassDef == null) continue;
+            var childCopy = child.CloneInternal();
             childCopy.SetParent(copy);
         }
         return copy;

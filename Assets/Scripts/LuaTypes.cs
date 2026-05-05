@@ -58,6 +58,30 @@ public class LuaVector2
         new LuaVector2(X + (other.X - X) * t, Y + (other.Y - Y) * t);
 
     public override string ToString() => $"{X}, {Y}";
+
+    public override bool Equals(object obj) =>
+        obj is LuaVector2 o && X == o.X && Y == o.Y;
+    public override int GetHashCode() => X.GetHashCode() ^ (Y.GetHashCode() << 1);
+    public static bool operator ==(LuaVector2 a, LuaVector2 b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a is null || b is null) return false;
+        return a.X == b.X && a.Y == b.Y;
+    }
+    public static bool operator !=(LuaVector2 a, LuaVector2 b) => !(a == b);
+    public static bool operator <(LuaVector2 a, LuaVector2 b) => a.SquaredMagnitude < b.SquaredMagnitude;
+    public static bool operator >(LuaVector2 a, LuaVector2 b) => a.SquaredMagnitude > b.SquaredMagnitude;
+    public static bool operator <=(LuaVector2 a, LuaVector2 b) => a.SquaredMagnitude <= b.SquaredMagnitude;
+    public static bool operator >=(LuaVector2 a, LuaVector2 b) => a.SquaredMagnitude >= b.SquaredMagnitude;
+
+    // Lua metamethods — MoonSharp doesn't auto-bind C# operators to Lua's
+    // __lt/__le, so we expose them explicitly.
+    [MoonSharpUserDataMetamethod("__lt")]
+    public static bool MetaLt(LuaVector2 a, LuaVector2 b) =>
+        a != null && b != null && a.SquaredMagnitude <  b.SquaredMagnitude;
+    [MoonSharpUserDataMetamethod("__le")]
+    public static bool MetaLe(LuaVector2 a, LuaVector2 b) =>
+        a != null && b != null && a.SquaredMagnitude <= b.SquaredMagnitude;
 }
 
 [MoonSharpUserData]
@@ -126,6 +150,29 @@ public class LuaVector3
     public Vector3 ToUnity() => new Vector3(X, Y, Z);
     [MoonSharpHidden]
     public static LuaVector3 FromUnity(Vector3 v) => new LuaVector3(v.x, v.y, v.z);
+
+    public override bool Equals(object obj) =>
+        obj is LuaVector3 o && X == o.X && Y == o.Y && Z == o.Z;
+    public override int GetHashCode() =>
+        X.GetHashCode() ^ (Y.GetHashCode() << 1) ^ (Z.GetHashCode() << 2);
+    public static bool operator ==(LuaVector3 a, LuaVector3 b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a is null || b is null) return false;
+        return a.X == b.X && a.Y == b.Y && a.Z == b.Z;
+    }
+    public static bool operator !=(LuaVector3 a, LuaVector3 b) => !(a == b);
+    public static bool operator <(LuaVector3 a, LuaVector3 b) => a.SquaredMagnitude < b.SquaredMagnitude;
+    public static bool operator >(LuaVector3 a, LuaVector3 b) => a.SquaredMagnitude > b.SquaredMagnitude;
+    public static bool operator <=(LuaVector3 a, LuaVector3 b) => a.SquaredMagnitude <= b.SquaredMagnitude;
+    public static bool operator >=(LuaVector3 a, LuaVector3 b) => a.SquaredMagnitude >= b.SquaredMagnitude;
+
+    [MoonSharpUserDataMetamethod("__lt")]
+    public static bool MetaLt(LuaVector3 a, LuaVector3 b) =>
+        a != null && b != null && a.SquaredMagnitude <  b.SquaredMagnitude;
+    [MoonSharpUserDataMetamethod("__le")]
+    public static bool MetaLe(LuaVector3 a, LuaVector3 b) =>
+        a != null && b != null && a.SquaredMagnitude <= b.SquaredMagnitude;
 }
 
 [MoonSharpUserData]
@@ -164,6 +211,30 @@ public class LuaColor3
     }
 
     public override string ToString() => $"{R}, {G}, {B}";
+
+    public override bool Equals(object obj) =>
+        obj is LuaColor3 o && R == o.R && G == o.G && B == o.B;
+    public override int GetHashCode() =>
+        R.GetHashCode() ^ (G.GetHashCode() << 1) ^ (B.GetHashCode() << 2);
+    public static bool operator ==(LuaColor3 a, LuaColor3 b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a is null || b is null) return false;
+        return a.R == b.R && a.G == b.G && a.B == b.B;
+    }
+    public static bool operator !=(LuaColor3 a, LuaColor3 b) => !(a == b);
+    private float Luma => 0.299f * R + 0.587f * G + 0.114f * B;
+    public static bool operator <(LuaColor3 a, LuaColor3 b) => a.Luma < b.Luma;
+    public static bool operator >(LuaColor3 a, LuaColor3 b) => a.Luma > b.Luma;
+    public static bool operator <=(LuaColor3 a, LuaColor3 b) => a.Luma <= b.Luma;
+    public static bool operator >=(LuaColor3 a, LuaColor3 b) => a.Luma >= b.Luma;
+
+    [MoonSharpUserDataMetamethod("__lt")]
+    public static bool MetaLt(LuaColor3 a, LuaColor3 b) =>
+        a != null && b != null && a.Luma <  b.Luma;
+    [MoonSharpUserDataMetamethod("__le")]
+    public static bool MetaLe(LuaColor3 a, LuaColor3 b) =>
+        a != null && b != null && a.Luma <= b.Luma;
 }
 
 [MoonSharpUserData]
@@ -185,6 +256,28 @@ public class LuaUDim
         new LuaUDim(Scale + (other.Scale - Scale) * t, Offset + (other.Offset - Offset) * t);
 
     public override string ToString() => $"{Scale}, {Offset}";
+
+    public override bool Equals(object obj) =>
+        obj is LuaUDim o && Scale == o.Scale && Offset == o.Offset;
+    public override int GetHashCode() => Scale.GetHashCode() ^ (Offset.GetHashCode() << 1);
+    public static bool operator ==(LuaUDim a, LuaUDim b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a is null || b is null) return false;
+        return a.Scale == b.Scale && a.Offset == b.Offset;
+    }
+    public static bool operator !=(LuaUDim a, LuaUDim b) => !(a == b);
+    public static bool operator <(LuaUDim a, LuaUDim b) => (a.Scale + a.Offset) < (b.Scale + b.Offset);
+    public static bool operator >(LuaUDim a, LuaUDim b) => (a.Scale + a.Offset) > (b.Scale + b.Offset);
+    public static bool operator <=(LuaUDim a, LuaUDim b) => (a.Scale + a.Offset) <= (b.Scale + b.Offset);
+    public static bool operator >=(LuaUDim a, LuaUDim b) => (a.Scale + a.Offset) >= (b.Scale + b.Offset);
+
+    [MoonSharpUserDataMetamethod("__lt")]
+    public static bool MetaLt(LuaUDim a, LuaUDim b) =>
+        a != null && b != null && (a.Scale + a.Offset) <  (b.Scale + b.Offset);
+    [MoonSharpUserDataMetamethod("__le")]
+    public static bool MetaLe(LuaUDim a, LuaUDim b) =>
+        a != null && b != null && (a.Scale + a.Offset) <= (b.Scale + b.Offset);
 }
 
 [MoonSharpUserData]
@@ -208,6 +301,17 @@ public class LuaUDim2
         new LuaUDim2(X.Lerp(other.X, t), Y.Lerp(other.Y, t));
 
     public override string ToString() => $"({X.Scale}, {X.Offset}), ({Y.Scale}, {Y.Offset})";
+
+    public override bool Equals(object obj) =>
+        obj is LuaUDim2 o && X == o.X && Y == o.Y;
+    public override int GetHashCode() => X.GetHashCode() ^ (Y.GetHashCode() << 1);
+    public static bool operator ==(LuaUDim2 a, LuaUDim2 b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a is null || b is null) return false;
+        return a.X == b.X && a.Y == b.Y;
+    }
+    public static bool operator !=(LuaUDim2 a, LuaUDim2 b) => !(a == b);
 }
 
 [MoonSharpUserData]
@@ -309,6 +413,29 @@ public class LuaCFrame
     }
 
     public override string ToString() => $"Position({Position}), Rotation({Rotation})";
+
+    // Equality only checks Position — per the spec, CFrame's primary key is Position.
+    public override bool Equals(object obj) =>
+        obj is LuaCFrame o && Position == o.Position;
+    public override int GetHashCode() => Position?.GetHashCode() ?? 0;
+    public static bool operator ==(LuaCFrame a, LuaCFrame b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a is null || b is null) return false;
+        return a.Position == b.Position;
+    }
+    public static bool operator !=(LuaCFrame a, LuaCFrame b) => !(a == b);
+    public static bool operator <(LuaCFrame a, LuaCFrame b) => a.Position < b.Position;
+    public static bool operator >(LuaCFrame a, LuaCFrame b) => a.Position > b.Position;
+    public static bool operator <=(LuaCFrame a, LuaCFrame b) => a.Position <= b.Position;
+    public static bool operator >=(LuaCFrame a, LuaCFrame b) => a.Position >= b.Position;
+
+    [MoonSharpUserDataMetamethod("__lt")]
+    public static bool MetaLt(LuaCFrame a, LuaCFrame b) =>
+        a != null && b != null && a.Position.SquaredMagnitude <  b.Position.SquaredMagnitude;
+    [MoonSharpUserDataMetamethod("__le")]
+    public static bool MetaLe(LuaCFrame a, LuaCFrame b) =>
+        a != null && b != null && a.Position.SquaredMagnitude <= b.Position.SquaredMagnitude;
 }
 
 public static class LuaTypes

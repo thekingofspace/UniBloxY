@@ -7,6 +7,20 @@ public class BaseCube : Shadable
 
     public override bool ParentsUnityObject => false;
 
+    public override bool Clonable => true;
+
+    public override void CopyState(LuaInstance source, LuaInstance target)
+    {
+        // Carry over Shadable state (shadow flags, attached shaders/materials)
+        // before applying our own.
+        base.CopyState(source, target);
+        if (source.UserState is State src && target.UserState is State dst)
+        {
+            dst.Size = src.Size;
+            dst.CFrame = src.CFrame;
+        }
+    }
+
     private class State
     {
         public LuaVector3 Size = LuaVector3.One;

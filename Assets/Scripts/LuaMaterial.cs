@@ -24,6 +24,18 @@ public class LuaMaterial
         return inst;
     }
 
+    // Make a sibling instance that copies all per-object property overrides
+    // from `existing` (which must already be tracked by this LuaMaterial).
+    // Used by Shadable.CopyState during Clone.
+    [MoonSharpHidden]
+    public Material CloneInstance(Material existing)
+    {
+        var src = existing != null && instances.Contains(existing) ? existing : Source;
+        var inst = src != null ? new Material(src) : null;
+        if (inst != null) instances.Add(inst);
+        return inst;
+    }
+
     [MoonSharpHidden]
     public bool DropInstance(Material m) => instances.Remove(m);
 
@@ -210,24 +222,16 @@ public static class MaterialProps
             case DataType.Boolean:
                 mat.SetInt(prop, value.Boolean ? 1 : 0);
                 break;
+            case DataType.String:
+                // strings get hashed into a stable float so shaders can branch on them
+                mat.SetFloat(prop, (value.String ?? "").GetHashCode());
+                break;
             case DataType.UserData:
-                var obj = value.UserData.Object;
-                if (obj is LuaVector3 v3)
-                    mat.SetVector(prop, new Vector4(v3.X, v3.Y, v3.Z, 0f));
-                else if (obj is LuaVector2 v2)
-                    mat.SetVector(prop, new Vector4(v2.X, v2.Y, 0f, 0f));
-                else if (obj is LuaColor3 c3)
-                    mat.SetColor(prop, new Color(c3.R, c3.G, c3.B, 1f));
-                else if (obj is Color col)
-                    mat.SetColor(prop, col);
-                else if (obj is Vector4 v4)
-                    mat.SetVector(prop, v4);
-                else if (obj is LuaTexture lt)
-                    mat.SetTexture(prop, lt.Texture);
-                else if (obj is Texture tex)
-                    mat.SetTexture(prop, tex);
-                else
-                    throw new ScriptRuntimeException($"Material.Set: unsupported value type for \"{prop}\"");
+                ApplyUserData(mat, prop, value.UserData.Object);
+                break;
+            case DataType.Table:
+                // table → Vector4 by reading numeric fields x/y/z/w (or 1..4)
+                mat.SetVector(prop, TableToVector4(value.Table));
                 break;
             case DataType.Nil:
             case DataType.Void:
@@ -235,6 +239,72 @@ public static class MaterialProps
             default:
                 throw new ScriptRuntimeException($"Material.Set: unsupported value type for \"{prop}\"");
         }
+    }
+
+    private static void ApplyUserData(Material mat, string prop, object obj)
+    {
+        switch (obj)
+        {
+            case LuaVector3 v3:
+                mat.SetVector(prop, new Vector4(v3.X, v3.Y, v3.Z, 0f));
+                break;
+            case LuaVector2 v2:
+                mat.SetVector(prop, new Vector4(v2.X, v2.Y, 0f, 0f));
+                break;
+            case LuaColor3 c3:
+                mat.SetColor(prop, new Color(c3.R, c3.G, c3.B, 1f));
+                break;
+            case LuaCFrame cf:
+                // CFrame becomes a 4x4 matrix the shader can multiply against
+                var trs = Matrix4x4.TRS(
+                    new Vector3(cf.Position.X, cf.Position.Y, cf.Position.Z),
+                    cf.Quat,
+                    Vector3.one);
+                mat.SetMatrix(prop, trs);
+                break;
+            case LuaUDim ud:
+                mat.SetVector(prop, new Vector4(ud.Scale, ud.Offset, 0f, 0f));
+                break;
+            case LuaUDim2 ud2:
+                mat.SetVector(prop, new Vector4(ud2.X.Scale, ud2.X.Offset, ud2.Y.Scale, ud2.Y.Offset));
+                break;
+            case LuaTexture lt:
+                mat.SetTexture(prop, lt.Texture);
+                break;
+            case Color col:
+                mat.SetColor(prop, col);
+                break;
+            case Vector4 v4:
+                mat.SetVector(prop, v4);
+                break;
+            case Vector3 uv3:
+                mat.SetVector(prop, new Vector4(uv3.x, uv3.y, uv3.z, 0f));
+                break;
+            case Vector2 uv2:
+                mat.SetVector(prop, new Vector4(uv2.x, uv2.y, 0f, 0f));
+                break;
+            case Matrix4x4 mx:
+                mat.SetMatrix(prop, mx);
+                break;
+            case Texture tex:
+                mat.SetTexture(prop, tex);
+                break;
+            default:
+                throw new ScriptRuntimeException($"Material.Set: unsupported value type for \"{prop}\"");
+        }
+    }
+
+    private static Vector4 TableToVector4(Table t)
+    {
+        float Read(string k, int i, float fallback)
+        {
+            var byKey = t.Get(k);
+            if (byKey.Type == DataType.Number) return (float)byKey.Number;
+            var byIdx = t.Get(i);
+            if (byIdx.Type == DataType.Number) return (float)byIdx.Number;
+            return fallback;
+        }
+        return new Vector4(Read("x", 1, 0f), Read("y", 2, 0f), Read("z", 3, 0f), Read("w", 4, 0f));
     }
 
     public static DynValue Read(Material mat, string prop)

@@ -4,6 +4,8 @@ public class Folder : LuaInstanceClass
 {
     public override string ClassName => "Folder";
 
+    public override bool Clonable => true;
+
     public override void OnEnterScene(LuaInstance instance)
     {
         if (instance.UnityObject != null) return;

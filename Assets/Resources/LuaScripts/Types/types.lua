@@ -4,6 +4,7 @@
 -- Vector2
 -- =============================================================================
 
+-- Equality compares X/Y. Ordering compares SquaredMagnitude.
 ---@class Vector2
 ---@field ClassName "Vector2"
 ---@field X number
@@ -71,6 +72,7 @@ function Vector2.new(x, y) end
 -- Vector3
 -- =============================================================================
 
+-- Equality compares X/Y/Z. Ordering compares SquaredMagnitude.
 ---@class Vector3
 ---@field ClassName "Vector3"
 ---@field X number
@@ -141,6 +143,7 @@ function Vector3.new(x, y, z) end
 -- Color3
 -- =============================================================================
 
+-- Equality compares R/G/B. Ordering compares perceived luminance.
 ---@class Color3
 ---@field ClassName "Color3"
 ---@field R number
@@ -262,6 +265,7 @@ function UDim2.fromOffset(x, y) end
 -- CFrame
 -- =============================================================================
 
+-- Equality and ordering compare Position only (rotation is ignored).
 ---@class CFrame
 ---@field ClassName "CFrame"
 ---@field Position Vector3

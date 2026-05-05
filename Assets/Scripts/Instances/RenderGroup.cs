@@ -8,6 +8,14 @@ public class RenderGroup : Renderable
 
     public override bool ParentsUnityObject => false;
 
+    public override bool Clonable => true;
+
+    public override void CopyState(LuaInstance source, LuaInstance target)
+    {
+        base.CopyState(source, target);
+        Get(target).OverrideParent = Get(source).OverrideParent;
+    }
+
     private class GroupData
     {
         public bool OverrideParent = false;

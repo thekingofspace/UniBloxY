@@ -2,6 +2,8 @@ using MoonSharp.Interpreter;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -28,6 +30,20 @@ public class SerdeService : LuaService
 
         serde["hash"] = (Func<string, string, string>)Hash;
 
+        serde["compress"] = DynValue.NewCallback((ctx, args) =>
+        {
+            var algo = args.Count > 0 ? args[0].String : "gzip";
+            var raw = args.Count > 1 ? args[1].String : null;
+            return DynValue.NewString(Compress(algo, raw));
+        });
+
+        serde["decompress"] = DynValue.NewCallback((ctx, args) =>
+        {
+            var algo = args.Count > 0 ? args[0].String : "gzip";
+            var raw = args.Count > 1 ? args[1].String : null;
+            return DynValue.NewString(Decompress(algo, raw));
+        });
+
         script.Globals["Serde"] = serde;
     }
 
@@ -39,6 +55,17 @@ public class SerdeService : LuaService
                 var sb = new StringBuilder();
                 WriteJson(data, sb, pretty, 0);
                 return sb.ToString();
+            case "toml":
+                if (data.Type != DataType.Table)
+                    throw new ScriptRuntimeException("Serde.encode toml: expected a table");
+                var tomlSb = new StringBuilder();
+                WriteToml(data.Table, tomlSb, "");
+                return tomlSb.ToString();
+            case "yaml":
+            case "yml":
+                var yamlSb = new StringBuilder();
+                WriteYaml(data, yamlSb, 0, false);
+                return yamlSb.ToString();
             default:
                 throw new ScriptRuntimeException($"Serde.encode: unsupported format \"{format}\"");
         }
@@ -54,9 +81,58 @@ public class SerdeService : LuaService
                 SkipWs(raw, ref idx);
                 var v = ReadJson(script, raw, ref idx);
                 return v;
+            case "toml":
+                return ReadToml(script, raw);
+            case "yaml":
+            case "yml":
+                return ReadYaml(script, raw);
             default:
                 throw new ScriptRuntimeException($"Serde.decode: unsupported format \"{format}\"");
         }
+    }
+
+    // ---------------- Compression ----------------
+    // Output is base64-encoded so it can be carried as a Lua string.
+
+    private static string Compress(string algo, string input)
+    {
+        if (input == null) return "";
+        var bytes = Encoding.UTF8.GetBytes(input);
+        using var ms = new MemoryStream();
+        switch ((algo ?? "").ToLower())
+        {
+            case "gzip":
+                using (var z = new GZipStream(ms, CompressionLevel.Optimal, leaveOpen: true))
+                    z.Write(bytes, 0, bytes.Length);
+                break;
+            case "deflate":
+                using (var z = new DeflateStream(ms, CompressionLevel.Optimal, leaveOpen: true))
+                    z.Write(bytes, 0, bytes.Length);
+                break;
+            default:
+                throw new ScriptRuntimeException($"Serde.compress: unsupported algorithm \"{algo}\"");
+        }
+        return Convert.ToBase64String(ms.ToArray());
+    }
+
+    private static string Decompress(string algo, string input)
+    {
+        if (string.IsNullOrEmpty(input)) return "";
+        var bytes = Convert.FromBase64String(input);
+        using var src = new MemoryStream(bytes);
+        using var dest = new MemoryStream();
+        switch ((algo ?? "").ToLower())
+        {
+            case "gzip":
+                using (var z = new GZipStream(src, CompressionMode.Decompress)) z.CopyTo(dest);
+                break;
+            case "deflate":
+                using (var z = new DeflateStream(src, CompressionMode.Decompress)) z.CopyTo(dest);
+                break;
+            default:
+                throw new ScriptRuntimeException($"Serde.decompress: unsupported algorithm \"{algo}\"");
+        }
+        return Encoding.UTF8.GetString(dest.ToArray());
     }
 
     private static string Hash(string algo, string input)
@@ -321,5 +397,407 @@ public class SerdeService : LuaService
         while (i < s.Length && ((s[i] >= '0' && s[i] <= '9') || s[i] == '.' || s[i] == 'e' || s[i] == 'E' || s[i] == '+' || s[i] == '-')) i++;
         var n = double.Parse(s.Substring(start, i - start), CultureInfo.InvariantCulture);
         return DynValue.NewNumber(n);
+    }
+
+    // ---------------- TOML encode (subset) ----------------
+
+    private static void WriteToml(Table t, StringBuilder sb, string prefix)
+    {
+        // First pass: scalar / array entries at this section.
+        foreach (var p in t.Pairs)
+        {
+            var key = p.Key.ToPrintString();
+            var val = p.Value;
+            if (val.Type == DataType.Table && !IsArray(val.Table)) continue;
+            sb.Append(EscapeTomlKey(key)).Append(" = ");
+            WriteTomlValue(val, sb);
+            sb.Append('\n');
+        }
+        // Second pass: nested tables as [section] blocks.
+        foreach (var p in t.Pairs)
+        {
+            var val = p.Value;
+            if (val.Type != DataType.Table || IsArray(val.Table)) continue;
+            var key = p.Key.ToPrintString();
+            var section = string.IsNullOrEmpty(prefix) ? key : prefix + "." + key;
+            sb.Append('\n').Append('[').Append(section).Append("]\n");
+            WriteToml(val.Table, sb, section);
+        }
+    }
+
+    private static string EscapeTomlKey(string k)
+    {
+        for (int i = 0; i < k.Length; i++)
+        {
+            char c = k[i];
+            bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
+            if (!ok)
+            {
+                var sb = new StringBuilder();
+                sb.Append('"');
+                for (int j = 0; j < k.Length; j++) { if (k[j] == '"' || k[j] == '\\') sb.Append('\\'); sb.Append(k[j]); }
+                sb.Append('"');
+                return sb.ToString();
+            }
+        }
+        return k;
+    }
+
+    private static void WriteTomlValue(DynValue v, StringBuilder sb)
+    {
+        switch (v.Type)
+        {
+            case DataType.Nil: case DataType.Void:
+                sb.Append("\"\""); break;
+            case DataType.Boolean:
+                sb.Append(v.Boolean ? "true" : "false"); break;
+            case DataType.Number:
+                sb.Append(v.Number.ToString("R", CultureInfo.InvariantCulture)); break;
+            case DataType.String:
+                sb.Append('"');
+                foreach (var c in v.String)
+                {
+                    if (c == '"' || c == '\\') sb.Append('\\');
+                    sb.Append(c);
+                }
+                sb.Append('"');
+                break;
+            case DataType.Table:
+                sb.Append('[');
+                int n = v.Table.Length;
+                for (int i = 1; i <= n; i++)
+                {
+                    if (i > 1) sb.Append(", ");
+                    WriteTomlValue(v.Table.Get(i), sb);
+                }
+                sb.Append(']');
+                break;
+            default:
+                sb.Append("\"\""); break;
+        }
+    }
+
+    // ---------------- TOML decode (subset) ----------------
+    // Supports [section.subsection] headers, key = value, strings, numbers,
+    // booleans, and inline arrays of scalars. Comments start with '#'.
+
+    private static DynValue ReadToml(Script script, string s)
+    {
+        var root = new Table(script);
+        Table current = root;
+        var lines = s.Replace("\r\n", "\n").Split('\n');
+        for (int li = 0; li < lines.Length; li++)
+        {
+            var line = lines[li].Trim();
+            if (line.Length == 0 || line[0] == '#') continue;
+            if (line[0] == '[')
+            {
+                int close = line.IndexOf(']');
+                if (close < 0) throw new ScriptRuntimeException("Serde.decode toml: bad section header");
+                var path = line.Substring(1, close - 1).Trim();
+                current = ResolveTomlSection(root, path, script);
+                continue;
+            }
+            int eq = line.IndexOf('=');
+            if (eq < 0) continue;
+            var key = line.Substring(0, eq).Trim();
+            if (key.Length >= 2 && key[0] == '"' && key[key.Length - 1] == '"')
+                key = key.Substring(1, key.Length - 2);
+            var rawVal = line.Substring(eq + 1).Trim();
+            int hash = FindTomlComment(rawVal);
+            if (hash >= 0) rawVal = rawVal.Substring(0, hash).Trim();
+            current[key] = ParseTomlScalar(rawVal, script);
+        }
+        return DynValue.NewTable(root);
+    }
+
+    private static int FindTomlComment(string v)
+    {
+        bool inStr = false;
+        for (int i = 0; i < v.Length; i++)
+        {
+            char c = v[i];
+            if (c == '"') inStr = !inStr;
+            else if (c == '#' && !inStr) return i;
+        }
+        return -1;
+    }
+
+    private static Table ResolveTomlSection(Table root, string path, Script script)
+    {
+        var parts = path.Split('.');
+        Table cur = root;
+        foreach (var raw in parts)
+        {
+            var part = raw.Trim();
+            if (part.Length >= 2 && part[0] == '"' && part[part.Length - 1] == '"')
+                part = part.Substring(1, part.Length - 2);
+            var existing = cur.Get(part);
+            if (existing.Type == DataType.Table)
+                cur = existing.Table;
+            else
+            {
+                var t = new Table(script);
+                cur[part] = DynValue.NewTable(t);
+                cur = t;
+            }
+        }
+        return cur;
+    }
+
+    private static DynValue ParseTomlScalar(string v, Script script)
+    {
+        if (v.Length == 0) return DynValue.Nil;
+        if (v == "true") return DynValue.True;
+        if (v == "false") return DynValue.False;
+        if (v[0] == '"' && v.Length >= 2 && v[v.Length - 1] == '"')
+        {
+            var inner = v.Substring(1, v.Length - 2);
+            return DynValue.NewString(inner.Replace("\\\"", "\"").Replace("\\\\", "\\"));
+        }
+        if (v[0] == '[')
+        {
+            var t = new Table(script);
+            var inner = v.Trim();
+            inner = inner.Substring(1, inner.Length - 2);
+            int idx = 1;
+            foreach (var part in SplitTopLevelCommas(inner))
+            {
+                var el = part.Trim();
+                if (el.Length == 0) continue;
+                t[idx++] = ParseTomlScalar(el, script);
+            }
+            return DynValue.NewTable(t);
+        }
+        if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var n))
+            return DynValue.NewNumber(n);
+        return DynValue.NewString(v);
+    }
+
+    private static IEnumerable<string> SplitTopLevelCommas(string s)
+    {
+        int depth = 0; bool inStr = false; int start = 0;
+        for (int i = 0; i < s.Length; i++)
+        {
+            char c = s[i];
+            if (c == '"') inStr = !inStr;
+            else if (!inStr && c == '[') depth++;
+            else if (!inStr && c == ']') depth--;
+            else if (!inStr && depth == 0 && c == ',')
+            {
+                yield return s.Substring(start, i - start);
+                start = i + 1;
+            }
+        }
+        if (start < s.Length) yield return s.Substring(start);
+    }
+
+    // ---------------- YAML encode (subset) ----------------
+    // Produces block-style YAML with nested mappings and sequences.
+
+    private static void WriteYaml(DynValue v, StringBuilder sb, int depth, bool inSeq)
+    {
+        var indent = new string(' ', depth * 2);
+        switch (v.Type)
+        {
+            case DataType.Nil: case DataType.Void:
+                sb.Append("null"); break;
+            case DataType.Boolean:
+                sb.Append(v.Boolean ? "true" : "false"); break;
+            case DataType.Number:
+                sb.Append(v.Number.ToString("R", CultureInfo.InvariantCulture)); break;
+            case DataType.String:
+                sb.Append(YamlString(v.String)); break;
+            case DataType.Table:
+                if (IsArray(v.Table))
+                {
+                    int n = v.Table.Length;
+                    if (n == 0) { sb.Append("[]"); break; }
+                    for (int i = 1; i <= n; i++)
+                    {
+                        if (i > 1 || inSeq) sb.Append('\n');
+                        sb.Append(indent).Append("- ");
+                        var el = v.Table.Get(i);
+                        if (el.Type == DataType.Table) { sb.Append('\n'); WriteYaml(el, sb, depth + 1, false); }
+                        else WriteYaml(el, sb, depth + 1, true);
+                    }
+                }
+                else
+                {
+                    bool first = true;
+                    foreach (var p in v.Table.Pairs)
+                    {
+                        if (!first) sb.Append('\n');
+                        first = false;
+                        sb.Append(indent).Append(YamlKey(p.Key.ToPrintString())).Append(':');
+                        if (p.Value.Type == DataType.Table)
+                        {
+                            sb.Append('\n');
+                            WriteYaml(p.Value, sb, depth + 1, false);
+                        }
+                        else
+                        {
+                            sb.Append(' ');
+                            WriteYaml(p.Value, sb, depth + 1, false);
+                        }
+                    }
+                }
+                break;
+        }
+    }
+
+    private static string YamlKey(string k)
+    {
+        foreach (var c in k)
+        {
+            bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
+            if (!ok) return YamlString(k);
+        }
+        return k;
+    }
+
+    private static string YamlString(string s)
+    {
+        bool needsQuote = s.Length == 0 || s.Contains(":") || s.Contains("#") || s.Contains("\n") || s == "true" || s == "false" || s == "null";
+        if (!needsQuote) return s;
+        var sb = new StringBuilder();
+        sb.Append('"');
+        foreach (var c in s)
+        {
+            if (c == '"' || c == '\\') sb.Append('\\');
+            if (c == '\n') { sb.Append("\\n"); continue; }
+            sb.Append(c);
+        }
+        sb.Append('"');
+        return sb.ToString();
+    }
+
+    // ---------------- YAML decode (subset) ----------------
+    // Indentation-driven parser. Supports nested mappings, "- " sequences,
+    // scalars (string/number/bool/null), and inline strings.
+
+    private static DynValue ReadYaml(Script script, string source)
+    {
+        var rawLines = source.Replace("\r\n", "\n").Split('\n');
+        var lines = new List<(int indent, string text)>();
+        foreach (var raw in rawLines)
+        {
+            int i = 0;
+            while (i < raw.Length && raw[i] == ' ') i++;
+            if (i >= raw.Length) continue;                 // blank
+            if (raw[i] == '#') continue;                   // comment
+            lines.Add((i, raw.Substring(i)));
+        }
+        int idx = 0;
+        return ReadYamlBlock(script, lines, ref idx, 0);
+    }
+
+    private static DynValue ReadYamlBlock(Script script, List<(int indent, string text)> lines, ref int idx, int minIndent)
+    {
+        if (idx >= lines.Count) return DynValue.Nil;
+        var (firstIndent, firstText) = lines[idx];
+        if (firstIndent < minIndent) return DynValue.Nil;
+
+        if (firstText.StartsWith("- "))
+        {
+            var arr = new Table(script);
+            int n = 1;
+            while (idx < lines.Count && lines[idx].indent == firstIndent && lines[idx].text.StartsWith("- "))
+            {
+                var rest = lines[idx].text.Substring(2);
+                idx++;
+                if (rest.Contains(":") && !rest.StartsWith("\""))
+                {
+                    // inline mapping start — treat as a map at indent+2
+                    var inlineLines = new List<(int, string)>();
+                    inlineLines.Add((firstIndent + 2, rest));
+                    while (idx < lines.Count && lines[idx].indent > firstIndent)
+                    {
+                        inlineLines.Add(lines[idx]);
+                        idx++;
+                    }
+                    int sub = 0;
+                    arr[n++] = ReadYamlBlock(script, inlineLines, ref sub, firstIndent + 2);
+                }
+                else if (rest.Length == 0)
+                {
+                    arr[n++] = ReadYamlBlock(script, lines, ref idx, firstIndent + 2);
+                }
+                else
+                {
+                    arr[n++] = ParseYamlScalar(rest, script);
+                }
+            }
+            return DynValue.NewTable(arr);
+        }
+
+        var map = new Table(script);
+        while (idx < lines.Count)
+        {
+            var (curIndent, curText) = lines[idx];
+            if (curIndent < firstIndent) break;
+            if (curIndent > firstIndent) { idx++; continue; }
+
+            int colon = FindYamlColon(curText);
+            if (colon < 0) { idx++; continue; }
+            var key = curText.Substring(0, colon).Trim();
+            if (key.Length >= 2 && key[0] == '"' && key[key.Length - 1] == '"')
+                key = key.Substring(1, key.Length - 2);
+            var rest = curText.Substring(colon + 1).Trim();
+            idx++;
+            if (rest.Length == 0)
+            {
+                if (idx < lines.Count && lines[idx].indent > curIndent)
+                    map[key] = ReadYamlBlock(script, lines, ref idx, curIndent + 1);
+                else
+                    map[key] = DynValue.Nil;
+            }
+            else
+            {
+                map[key] = ParseYamlScalar(rest, script);
+            }
+        }
+        return DynValue.NewTable(map);
+    }
+
+    private static int FindYamlColon(string s)
+    {
+        bool inStr = false;
+        for (int i = 0; i < s.Length; i++)
+        {
+            char c = s[i];
+            if (c == '"') inStr = !inStr;
+            else if (!inStr && c == ':') return i;
+        }
+        return -1;
+    }
+
+    private static DynValue ParseYamlScalar(string v, Script script)
+    {
+        v = v.Trim();
+        if (v.Length == 0 || v == "~" || v == "null") return DynValue.Nil;
+        if (v == "true") return DynValue.True;
+        if (v == "false") return DynValue.False;
+        if (v.Length >= 2 && v[0] == '"' && v[v.Length - 1] == '"')
+        {
+            return DynValue.NewString(v.Substring(1, v.Length - 2)
+                .Replace("\\\"", "\"").Replace("\\\\", "\\").Replace("\\n", "\n"));
+        }
+        if (v[0] == '[' && v[v.Length - 1] == ']')
+        {
+            var t = new Table(script);
+            var inner = v.Substring(1, v.Length - 2);
+            int idx = 1;
+            foreach (var part in SplitTopLevelCommas(inner))
+            {
+                var el = part.Trim();
+                if (el.Length == 0) continue;
+                t[idx++] = ParseYamlScalar(el, script);
+            }
+            return DynValue.NewTable(t);
+        }
+        if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var n))
+            return DynValue.NewNumber(n);
+        return DynValue.NewString(v);
     }
 }

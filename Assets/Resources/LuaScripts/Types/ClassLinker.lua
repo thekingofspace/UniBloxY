@@ -2,3 +2,7 @@
 ---@field Folder Folder
 ---@field BaseCube BaseCube
 ---@field RenderGroup RenderGroup
+---@field GlobalLight GlobalLight
+---@field PointLight PointLight
+---@field Spotlight Spotlight
+---@field AreaLight AreaLight

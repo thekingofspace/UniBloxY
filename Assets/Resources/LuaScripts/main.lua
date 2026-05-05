@@ -1,10 +1,29 @@
 local safe_req = require
 
 local Tests = {
-	["Example"] = "Example",
-	["RunService"] = "RunServiceTest",
-	["System"] = "System",
-	["Serde"] = "Serde"
+	["Example"]       = "Example",
+	["Globals"]       = "Globals",
+	["Types"]         = "Types",
+	["Equality"]      = "Equality",
+	["Instance"]      = "Instance",
+	["DataModel"]     = "DataModel",
+	["Camera"]        = "Camera",
+	["Folder"]        = "Folder",
+	["BaseCube"]      = "BaseCube",
+	["RenderGroup"]   = "RenderGroup",
+	["Shadable"]      = "Shadable",
+	["Clone"]         = "Clone",
+	["Lights"]        = "Lights",
+	["Lighting"]      = "Lighting",
+	["AnimatedLight"] = "AnimatedLight",
+	["AssetService"]  = "AssetService",
+	["ShaderService"] = "ShaderService",
+	["InputService"]  = "InputService",
+	["RunService"]    = "RunServiceTest",
+	["System"]        = "System",
+	["Fs"]            = "Fs",
+	["Serde"]         = "Serde",
+	["SerdeFormats"]  = "SerdeFormats",
 }
 
 ---@param path string
