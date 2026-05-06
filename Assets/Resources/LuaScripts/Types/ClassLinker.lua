@@ -1,6 +1,8 @@
 ---@class CreatableInstances
 ---@field Folder Folder
 ---@field BasePart BasePart
+---@field MeshPart MeshPart
+---@field CachedModel CachedModel
 ---@field RenderGroup RenderGroup
 ---@field GlobalLight GlobalLight
 ---@field PointLight PointLight

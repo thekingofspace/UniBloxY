@@ -24,7 +24,7 @@ public class BasePart : Shadable
 
     public enum PartShape { Cube, Sphere, Cylinder, Capsule, Plane, Quad }
 
-    private class State
+    protected class State
     {
         public LuaVector3 Size = LuaVector3.One;
         public LuaCFrame CFrame = LuaCFrame.Identity;
@@ -166,14 +166,16 @@ public class BasePart : Shadable
         }
     }
 
-    private static Shader defaultShader;
+    protected static Shader defaultShader;
     private static Shader transparentShader;
 
-    private static void CreatePart(LuaInstance instance, State s)
+    protected virtual GameObject BuildGameObject(LuaInstance instance, State s)
     {
-        var go = GameObject.CreatePrimitive(ShapeToPrimitive(s.Shape));
-        go.name = instance.Name;
+        return GameObject.CreatePrimitive(ShapeToPrimitive(s.Shape));
+    }
 
+    protected virtual void OnUnityObjectCreated(LuaInstance instance, GameObject go)
+    {
         var renderer = go.GetComponent<Renderer>();
         if (renderer != null)
         {
@@ -181,6 +183,15 @@ public class BasePart : Shadable
                 defaultShader = Resources.Load<Shader>("Shaders/Default");
             renderer.sharedMaterial = defaultShader != null ? new Material(defaultShader) : null;
         }
+    }
+
+    private static void CreatePart(LuaInstance instance, State s)
+    {
+        var cls = (BasePart)instance.ClassDef;
+        var go = cls.BuildGameObject(instance, s);
+        go.name = instance.Name;
+
+        cls.OnUnityObjectCreated(instance, go);
 
         instance.UnityObject = go;
         ApplyTransform(instance, s);

@@ -12,6 +12,7 @@ public class AssetService : LuaService
     private readonly Dictionary<string, LuaTexture> textureCache = new();
     private readonly Dictionary<string, LuaImage> imageCache = new();
     private readonly Dictionary<string, LuaFont> fontCache = new();
+    private readonly Dictionary<string, LuaMesh> meshCache = new();
 
     private Signal shaderLoadedSignal;
     private Signal assetLoadedSignal;
@@ -26,6 +27,7 @@ public class AssetService : LuaService
         UserData.RegisterType<LuaTexture>();
         UserData.RegisterType<LuaImage>();
         UserData.RegisterType<LuaFont>();
+        UserData.RegisterType<LuaMesh>();
 
         shaderLoadedSignal = new Signal(script, "AssetService.ShaderLoaded");
         assetLoadedSignal = new Signal(script, "AssetService.AssetLoaded");
@@ -130,6 +132,39 @@ public class AssetService : LuaService
         return wrapper;
     }
 
+    public LuaMesh GetMesh(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+            throw new ScriptRuntimeException("AssetService:GetMesh requires a mesh name");
+
+        if (meshCache.TryGetValue(name, out var existing))
+            return existing;
+
+        var mesh = Resources.Load<Mesh>("Meshes/" + name);
+        if (mesh == null)
+        {
+            var prefab = Resources.Load<GameObject>("Meshes/" + name);
+            if (prefab != null)
+            {
+                var mf = prefab.GetComponentInChildren<MeshFilter>();
+                if (mf != null) mesh = mf.sharedMesh;
+                if (mesh == null)
+                {
+                    var smr = prefab.GetComponentInChildren<SkinnedMeshRenderer>();
+                    if (smr != null) mesh = smr.sharedMesh;
+                }
+            }
+        }
+        if (mesh == null)
+            throw new ScriptRuntimeException(
+                $"AssetService: mesh \"{name}\" not found at Resources/Meshes/{name}");
+
+        var wrapper = new LuaMesh(name, mesh);
+        meshCache[name] = wrapper;
+        assetLoadedSignal.Fire(name);
+        return wrapper;
+    }
+
     public LuaFont GetFont(string name)
     {
         if (string.IsNullOrEmpty(name))
@@ -159,6 +194,7 @@ public class AssetService : LuaService
         table["GetTexture"] = (Func<string, LuaTexture>)GetTexture;
         table["GetImage"] = (Func<string, LuaImage>)GetImage;
         table["GetFont"] = (Func<string, LuaFont>)GetFont;
+        table["GetMesh"] = (Func<string, LuaMesh>)GetMesh;
 
         table["CreateMaterial"] = DynValue.NewCallback((ctx, args) =>
         {
