@@ -19,8 +19,7 @@ public class ListenerService : LuaService
 
     void Update()
     {
-        // Iterate in reverse so a listener that destroys itself in a callback
-        // can be pruned in-place without skipping the next entry.
+
         for (int i = active.Count - 1; i >= 0; i--)
         {
             var l = active[i];
@@ -33,10 +32,6 @@ public class ListenerService : LuaService
     {
         var table = new Table(script);
 
-        // Bound as plain delegates rather than `DynValue.NewCallback` so they
-        // can be invoked with dot syntax (no self) — `ListenerService.ListenToMouse()`
-        // works the same as `ListenerService:ListenToMouse()`. MoonSharp drops
-        // the implicit self for Func<>-bound CLR methods.
         table["ListenToMouse"] = (System.Func<LuaListener>)CreateMouseListener;
         table["ListenToInstance"] = (System.Func<DynValue, LuaListener>)CreateInstanceListener;
 

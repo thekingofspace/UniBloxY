@@ -74,8 +74,6 @@ public class LuaVector2
     public static bool operator <=(LuaVector2 a, LuaVector2 b) => a.SquaredMagnitude <= b.SquaredMagnitude;
     public static bool operator >=(LuaVector2 a, LuaVector2 b) => a.SquaredMagnitude >= b.SquaredMagnitude;
 
-    // Lua metamethods — MoonSharp doesn't auto-bind C# operators to Lua's
-    // __lt/__le, so we expose them explicitly.
     [MoonSharpUserDataMetamethod("__lt")]
     public static bool MetaLt(LuaVector2 a, LuaVector2 b) =>
         a != null && b != null && a.SquaredMagnitude <  b.SquaredMagnitude;
@@ -414,7 +412,6 @@ public class LuaCFrame
 
     public override string ToString() => $"Position({Position}), Rotation({Rotation})";
 
-    // Equality only checks Position — per the spec, CFrame's primary key is Position.
     public override bool Equals(object obj) =>
         obj is LuaCFrame o && Position == o.Position;
     public override int GetHashCode() => Position?.GetHashCode() ?? 0;

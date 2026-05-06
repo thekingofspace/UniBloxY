@@ -36,21 +36,15 @@ public abstract class Shadable : Renderable
         dst.CastShadow = src.CastShadow;
         dst.ReceiveShadow = src.ReceiveShadow;
 
-        // Re-add shaders. Each gets its own runtime Material instance (so
-        // per-object property edits don't bleed between the original and clone).
         for (int i = 0; i < src.Shaders.Count; i++)
         {
             var shader = src.Shaders[i];
             dst.Shaders.Add(shader);
             var srcMat = src.ShaderInstances[i];
-            // Copy via Material(Material) so all SetFloat/SetVector/SetTexture
-            // overrides applied through SetShaderData come along.
+
             dst.ShaderInstances.Add(srcMat != null ? new Material(srcMat) : new Material(shader.Shader));
         }
 
-        // Re-add materials. CloneInstance on the LuaMaterial gives us a
-        // sibling instance that already carries the source's per-object
-        // property overrides.
         foreach (var mat in src.Materials)
         {
             dst.Materials.Add(mat);
@@ -271,9 +265,6 @@ public abstract class Shadable : Renderable
         for (int i = 0; i < d.Materials.Count; i++)
             mats[d.ShaderInstances.Count + i] = d.MaterialInstances[d.Materials[i]];
 
-        // sharedMaterials avoids Unity's auto-clone, so our tracked instances
-        // remain the same objects the renderer is drawing — material-wide
-        // property edits propagate correctly.
         renderer.sharedMaterials = mats;
     }
 

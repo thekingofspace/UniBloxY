@@ -9,14 +9,8 @@ public abstract class LuaInstanceClass
 
     public virtual bool ParentsUnityObject => true;
 
-    // Whether instances of this class can be cloned. Most instances are
-    // *not* cloneable by default (e.g. Camera, DataModel, lights);
-    // BaseCube / Folder / RenderGroup opt in.
     public virtual bool Clonable => false;
 
-    // Copy class-managed state (UserState, properties) from source → target.
-    // Default implementation re-runs Initialize and replays known properties
-    // via TrySetProperty; override for classes that store data outside that path.
     public virtual void CopyState(LuaInstance source, LuaInstance target) { }
 
     public virtual void ImportFromUnityObject(LuaInstance instance, GameObject go) { }

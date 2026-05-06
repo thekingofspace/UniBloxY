@@ -1,10 +1,6 @@
 using MoonSharp.Interpreter;
 using UnityEngine;
 
-// Shared Size/Position handling for ShadableUI subclasses. Sizes/positions are
-// LuaUDim2 values mapping to RectTransform anchor + offset pairs the way
-// Roblox-style "{Scale, Offset}" does — anchorMin/Max collapse to a single
-// point and offsets carry the pixel deltas.
 internal static class GUIRect
 {
     public static readonly LuaUDim2 DefaultSize =
@@ -21,8 +17,6 @@ internal static class GUIRect
         rt.anchorMin = new Vector2(anchorX, anchorY);
         rt.anchorMax = new Vector2(anchorX, anchorY);
 
-        // Roblox AnchorPoint Y=0 means top, Y=1 means bottom — UGUI's pivot is
-        // bottom-up, so flip Y. Default (0,0) keeps the legacy top-left pivot.
         var ap = anchorPoint ?? LuaVector2.Zero;
         rt.pivot = new Vector2(ap.X, 1f - ap.Y);
 

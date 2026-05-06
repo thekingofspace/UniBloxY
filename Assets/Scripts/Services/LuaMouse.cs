@@ -46,7 +46,7 @@ public class LuaMouse
 
         t["IsButtonDown"] = DynValue.NewCallback((ctx, args) =>
         {
-            // Accept both `mouse:IsButtonDown("x")` and `Mouse.IsButtonDown("x")`.
+
             var name = args.Count > 0 && args[args.Count - 1].Type == DataType.String
                 ? args[args.Count - 1].String : null;
             return DynValue.NewBoolean(IsButtonDown(name));
@@ -66,7 +66,7 @@ public class LuaMouse
 
         t["SetCursor"] = DynValue.NewCallback((ctx, args) =>
         {
-            // Drop the leading `self` when called as `mouse:SetCursor(...)`.
+
             int start = (args.Count > 0 && args[0].Type == DataType.Table) ? 1 : 0;
             var first = args.Count > start ? args[start] : DynValue.Nil;
             var second = args.Count > start + 1 ? args[start + 1] : DynValue.Nil;
@@ -100,10 +100,7 @@ public class LuaMouse
             }
             return DynValue.Nil;
         });
-        // `mouse.Cursor = "Crosshair"` / `mouse.Cursor = image` shortcuts.
-        // Use DynValue.NewCallback so MoonSharp's metamethod dispatcher gets a
-        // proper CallbackFunction (Action<,,> binding can NRE when invoked
-        // through the VM's metamethod path).
+
         mt["__newindex"] = DynValue.NewCallback((ctx, args) =>
         {
             var self = args.Count > 0 ? args[0] : DynValue.Nil;
@@ -189,12 +186,9 @@ public class LuaMouse
         }
     }
 
-    // ----- Cursor handling -----
-
     private static void ApplyCursor(DynValue value, DynValue hotspotArg)
     {
-        // Optional hotspot (Vector2). When absent, named cursors fall back to
-        // their canonical hotspot and custom textures center on the texture.
+
         Vector2? hotspot = null;
         if (hotspotArg.Type == DataType.UserData && hotspotArg.UserData.Object is LuaVector2 v2)
             hotspot = new Vector2(v2.X, v2.Y);
@@ -210,7 +204,7 @@ public class LuaMouse
         {
             var name = value.String;
             var tex = ResolveNamedCursor(name, out var defaultHotspot);
-            // null tex with non-empty name signals "use OS default" (Default/Arrow).
+
             if (tex == null)
             {
                 Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto);
@@ -260,7 +254,6 @@ public class LuaMouse
         if (string.IsNullOrEmpty(name)) return null;
         var canonical = name.Trim().ToLowerInvariant();
 
-        // OS-default aliases: returning null tells SetCursor to clear back to OS arrow.
         if (canonical == "default" || canonical == "arrow" || canonical == "system")
             return null;
 
@@ -270,8 +263,6 @@ public class LuaMouse
             return entry.tex;
         }
 
-        // Allow users to drop in a better cursor at Resources/Cursors/<name>;
-        // procedural fallbacks below mean the named cursor still works without it.
         var fromRes = Resources.Load<Texture2D>("Cursors/" + name);
         Texture2D tex;
         Vector2 hp;
@@ -309,10 +300,6 @@ public class LuaMouse
         return tex;
     }
 
-    // ----- Procedural cursors -----
-    // Pixel coordinates use a top-left origin (more natural for cursor design);
-    // Plot() flips Y to Unity's bottom-left texture space.
-
     private const int CursorSize = 16;
 
     private static Texture2D NewCursorTexture()
@@ -348,17 +335,17 @@ public class LuaMouse
         var t = NewCursorTexture();
         var black = Color.black;
         var white = Color.white;
-        // Black arms with a 2px gap around the center for readability.
+
         DrawVLine(t, 8, 0, 6, black);
         DrawVLine(t, 8, 9, 15, black);
         DrawHLine(t, 0, 6, 8, black);
         DrawHLine(t, 9, 15, 8, black);
-        // White inner-stroke neighbors so the cross stays visible on dark backgrounds.
+
         DrawVLine(t, 7, 0, 6, white); DrawVLine(t, 9, 0, 6, white);
         DrawVLine(t, 7, 9, 15, white); DrawVLine(t, 9, 9, 15, white);
         DrawHLine(t, 0, 6, 7, white);  DrawHLine(t, 0, 6, 9, white);
         DrawHLine(t, 9, 15, 7, white); DrawHLine(t, 9, 15, 9, white);
-        // Center dot (white).
+
         Plot(t, 8, 8, white);
         t.Apply();
         hotspot = new Vector2(8, 8);
@@ -370,12 +357,12 @@ public class LuaMouse
         var t = NewCursorTexture();
         var black = Color.black;
         var white = Color.white;
-        // 2-pixel-wide black bar with white outline for contrast.
+
         DrawVLine(t, 7, 2, 13, black);
         DrawVLine(t, 8, 2, 13, black);
         DrawVLine(t, 6, 2, 13, white);
         DrawVLine(t, 9, 2, 13, white);
-        // Top and bottom serifs.
+
         DrawHLine(t, 5, 10, 2, black);
         DrawHLine(t, 5, 10, 13, black);
         DrawHLine(t, 5, 10, 1, white);
@@ -389,24 +376,24 @@ public class LuaMouse
     {
         var t = NewCursorTexture();
         var black = Color.black;
-        // Top and bottom rails.
+
         DrawHLine(t, 4, 11, 1, black);
         DrawHLine(t, 4, 11, 14, black);
-        // Top triangle: rows 2..7 narrow inward to the waist.
+
         for (int y = 2; y <= 7; y++)
         {
             int inset = y - 2;
             Plot(t, 4 + inset, y, black);
             Plot(t, 11 - inset, y, black);
         }
-        // Bottom triangle: rows 8..13 widen back outward.
+
         for (int y = 8; y <= 13; y++)
         {
             int inset = 13 - y;
             Plot(t, 4 + inset, y, black);
             Plot(t, 11 - inset, y, black);
         }
-        // A few sand grains for personality.
+
         Plot(t, 7, 7, black); Plot(t, 8, 7, black);
         Plot(t, 7, 8, black); Plot(t, 8, 8, black);
         t.Apply();
@@ -419,18 +406,17 @@ public class LuaMouse
         var t = NewCursorTexture();
         var black = Color.black;
         var white = Color.white;
-        // An upward triangle with a 3-pixel-wide shaft below — recognizable as
-        // a "click here" indicator. Hotspot is the tip at (8, 1).
+
         Plot(t, 8, 1, black);
         DrawHLine(t, 7, 9, 2, black);
         DrawHLine(t, 6, 10, 3, black);
         DrawHLine(t, 5, 11, 4, black);
         DrawHLine(t, 4, 12, 5, black);
-        // Shaft (3 pixels wide, length 8).
+
         DrawVLine(t, 7, 6, 13, black);
         DrawVLine(t, 8, 6, 13, black);
         DrawVLine(t, 9, 6, 13, black);
-        // White outline rim for legibility on busy backgrounds.
+
         Plot(t, 8, 0, white);
         Plot(t, 7, 1, white); Plot(t, 9, 1, white);
         Plot(t, 6, 2, white); Plot(t, 10, 2, white);

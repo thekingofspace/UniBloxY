@@ -91,9 +91,6 @@ public class SerdeService : LuaService
         }
     }
 
-    // ---------------- Compression ----------------
-    // Output is base64-encoded so it can be carried as a Lua string.
-
     private static string Compress(string algo, string input)
     {
         if (input == null) return "";
@@ -178,8 +175,6 @@ public class SerdeService : LuaService
         }
         return ~crc;
     }
-
-    // ---------------- JSON encode ----------------
 
     private static void WriteJson(DynValue v, StringBuilder sb, bool pretty, int depth)
     {
@@ -281,8 +276,6 @@ public class SerdeService : LuaService
         }
         sb.Append('"');
     }
-
-    // ---------------- JSON decode ----------------
 
     private static void SkipWs(string s, ref int i)
     {
@@ -399,11 +392,9 @@ public class SerdeService : LuaService
         return DynValue.NewNumber(n);
     }
 
-    // ---------------- TOML encode (subset) ----------------
-
     private static void WriteToml(Table t, StringBuilder sb, string prefix)
     {
-        // First pass: scalar / array entries at this section.
+
         foreach (var p in t.Pairs)
         {
             var key = p.Key.ToPrintString();
@@ -413,7 +404,7 @@ public class SerdeService : LuaService
             WriteTomlValue(val, sb);
             sb.Append('\n');
         }
-        // Second pass: nested tables as [section] blocks.
+
         foreach (var p in t.Pairs)
         {
             var val = p.Value;
@@ -476,10 +467,6 @@ public class SerdeService : LuaService
                 sb.Append("\"\""); break;
         }
     }
-
-    // ---------------- TOML decode (subset) ----------------
-    // Supports [section.subsection] headers, key = value, strings, numbers,
-    // booleans, and inline arrays of scalars. Comments start with '#'.
 
     private static DynValue ReadToml(Script script, string s)
     {
@@ -592,9 +579,6 @@ public class SerdeService : LuaService
         if (start < s.Length) yield return s.Substring(start);
     }
 
-    // ---------------- YAML encode (subset) ----------------
-    // Produces block-style YAML with nested mappings and sequences.
-
     private static void WriteYaml(DynValue v, StringBuilder sb, int depth, bool inSeq)
     {
         var indent = new string(' ', depth * 2);
@@ -672,10 +656,6 @@ public class SerdeService : LuaService
         return sb.ToString();
     }
 
-    // ---------------- YAML decode (subset) ----------------
-    // Indentation-driven parser. Supports nested mappings, "- " sequences,
-    // scalars (string/number/bool/null), and inline strings.
-
     private static DynValue ReadYaml(Script script, string source)
     {
         var rawLines = source.Replace("\r\n", "\n").Split('\n');
@@ -684,8 +664,8 @@ public class SerdeService : LuaService
         {
             int i = 0;
             while (i < raw.Length && raw[i] == ' ') i++;
-            if (i >= raw.Length) continue;                 // blank
-            if (raw[i] == '#') continue;                   // comment
+            if (i >= raw.Length) continue;
+            if (raw[i] == '#') continue;
             lines.Add((i, raw.Substring(i)));
         }
         int idx = 0;
@@ -708,7 +688,7 @@ public class SerdeService : LuaService
                 idx++;
                 if (rest.Contains(":") && !rest.StartsWith("\""))
                 {
-                    // inline mapping start — treat as a map at indent+2
+
                     var inlineLines = new List<(int, string)>();
                     inlineLines.Add((firstIndent + 2, rest));
                     while (idx < lines.Count && lines[idx].indent > firstIndent)

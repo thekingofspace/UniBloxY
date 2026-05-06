@@ -1,13 +1,13 @@
 return function()
     -- Two stationary cubes for the traveler to visit. They give the moving
     -- light something to fall on so we can see the highlight slide across.
-    local left = Instance.new("BaseCube", game)
+    local left = Instance.new("BasePart", game)
     left.Name = "LeftCube"
     left.Render = true
     left.Size = Vector3.new(3, 3, 3)
     left.CFrame = CFrame.new(Vector3.new(-5, 0, 0))
 
-    local right = Instance.new("BaseCube", game)
+    local right = Instance.new("BasePart", game)
     right.Name = "RightCube"
     right.Render = true
     right.Size = Vector3.new(3, 3, 3)
@@ -16,7 +16,7 @@ return function()
     -- Tiny traveler cube that carries a PointLight as a child. With
     -- LightElement's ParentsUnityObject = true, Unity's transform hierarchy
     -- automatically drags the light along when the traveler moves.
-    local traveler = Instance.new("BaseCube", game)
+    local traveler = Instance.new("BasePart", game)
     traveler.Name = "Traveler"
     traveler.Render = true
     traveler.Size = Vector3.new(0.5, 0.5, 0.5)

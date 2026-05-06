@@ -71,14 +71,10 @@ public class Frame : ShadableUI
             throw new ScriptRuntimeException(
                 $"Frame import: GameObject \"{go.name}\" has no RectTransform — only UI objects can be wrapped as Frame");
 
-        // Reuse an existing Image so editor-tweaked sprites/colors survive,
-        // or add one if the object is a bare RectTransform.
         s.Image = go.GetComponent<Image>() ?? go.AddComponent<Image>();
         s.Mask = go.GetComponent<RectMask2D>();
         s.ClipDescendants = s.Mask != null && s.Mask.enabled;
 
-        // The current rect is round-tripped as a pure-offset UDim2 — Scale
-        // would require knowing the parent at import time, which we don't.
         var size = rt.rect.size;
         s.Size = new LuaUDim2(new LuaUDim(0f, size.x), new LuaUDim(0f, size.y));
         var ap = rt.anchoredPosition;
@@ -105,8 +101,7 @@ public class Frame : ShadableUI
 
     public override void OnChildAdded(LuaInstance instance, LuaInstance child)
     {
-        // Re-apply size on children when this frame's size depends on parent —
-        // and re-apply ours so any pending child rect uses the latest layout.
+
         var s = (State)instance.UserState;
         if (instance.UnityObject != null)
             GUIRect.Apply((RectTransform)instance.UnityObject.transform, s.Size, s.Position, GetAnchorPoint(instance));

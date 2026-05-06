@@ -32,7 +32,7 @@ return function()
         seen = name
     end)
 
-    -- Load the project's Default shader (used by BaseCube). If the project ever
+    -- Load the project's Default shader (used by BasePart). If the project ever
     -- moves it we'll catch the error here, but fall back to skipping the load
     -- assertion rather than blocking unrelated tests.
     local ok = pcall(function() AssetService:GetShader("Default") end)

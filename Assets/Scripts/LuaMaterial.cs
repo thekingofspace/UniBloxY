@@ -24,9 +24,6 @@ public class LuaMaterial
         return inst;
     }
 
-    // Make a sibling instance that copies all per-object property overrides
-    // from `existing` (which must already be tracked by this LuaMaterial).
-    // Used by Shadable.CopyState during Clone.
     [MoonSharpHidden]
     public Material CloneInstance(Material existing)
     {
@@ -85,8 +82,6 @@ public class LuaMaterial
         }
     }
 
-    // Accepts either a number (uniform scale on both axes) or a Vector2
-    // (per-axis). Stored / read back as a Vector2.
     public object TileSize
     {
         get
@@ -223,14 +218,14 @@ public static class MaterialProps
                 mat.SetInt(prop, value.Boolean ? 1 : 0);
                 break;
             case DataType.String:
-                // strings get hashed into a stable float so shaders can branch on them
+
                 mat.SetFloat(prop, (value.String ?? "").GetHashCode());
                 break;
             case DataType.UserData:
                 ApplyUserData(mat, prop, value.UserData.Object);
                 break;
             case DataType.Table:
-                // table → Vector4 by reading numeric fields x/y/z/w (or 1..4)
+
                 mat.SetVector(prop, TableToVector4(value.Table));
                 break;
             case DataType.Nil:
@@ -255,7 +250,7 @@ public static class MaterialProps
                 mat.SetColor(prop, new Color(c3.R, c3.G, c3.B, 1f));
                 break;
             case LuaCFrame cf:
-                // CFrame becomes a 4x4 matrix the shader can multiply against
+
                 var trs = Matrix4x4.TRS(
                     new Vector3(cf.Position.X, cf.Position.Y, cf.Position.Z),
                     cf.Quat,

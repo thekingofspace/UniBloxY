@@ -1,11 +1,11 @@
 return function()
     -- Build a small subtree rooted at a clonable Folder, with a clonable
-    -- BaseCube child carrying its own properties and attributes.
+    -- BasePart child carrying its own properties and attributes.
     local root = Instance.new("Folder", game)
     root.Name = "OriginalRoot"
     root:SetAttribute("Tag", "alpha")
 
-    local cube = Instance.new("BaseCube", root)
+    local cube = Instance.new("BasePart", root)
     cube.Name = "OriginalCube"
     cube.Render = true
     cube.Size = Vector3.new(2, 3, 4)
@@ -31,7 +31,7 @@ return function()
     if #children ~= 1 then error("Clone should have 1 child, got " .. tostring(#children)) end
 
     local cubeCopy = children[1]
-    if cubeCopy.ClassName ~= "BaseCube" then error("Cloned child should be a BaseCube") end
+    if cubeCopy.ClassName ~= "BasePart" then error("Cloned child should be a BasePart") end
     if cubeCopy.Name ~= "OriginalCube" then error("Cloned child should preserve Name") end
     if cubeCopy.Size ~= Vector3.new(2, 3, 4) then error("Cloned cube Size mismatch") end
     if cubeCopy.CFrame ~= CFrame.new(Vector3.new(5, 6, 7)) then error("Cloned cube CFrame mismatch") end

@@ -71,8 +71,6 @@ public class LuaListener
         var inst = LuaInstance.ResolveInstance(v);
         if (inst == null) return false;
 
-        // Fire any pending "exit" signals so a script that removes a tracker
-        // mid-hover doesn't get stranded with an OnEnter that never matches.
         if (pressed.Remove(inst)) onReleaseSig.Fire(inst.Table);
         if (hovered.Remove(inst)) onLeaveSig.Fire(inst.Table);
         return trackers.Remove(inst);
@@ -89,8 +87,7 @@ public class LuaListener
     public void Destroy()
     {
         if (Destroyed) return;
-        // Drain remaining state — subscribers expect a paired exit for every
-        // OnEnter/OnActivated they've seen.
+
         foreach (var inst in pressed)
             if (inst != null) onReleaseSig.Fire(inst.Table);
         foreach (var inst in hovered)
@@ -109,9 +106,6 @@ public class LuaListener
         else TickInstance();
     }
 
-    // Treat an instance as "dead" if its UnityObject is gone (Destroy / out-of-scene),
-    // its GameObject is inactive in the hierarchy, its UI ancestor chain is hidden,
-    // or its Renderable ancestor chain has rendering off. Any of these cancel hits.
     private static bool IsLive(LuaInstance inst)
     {
         if (inst == null) return false;
@@ -123,16 +117,12 @@ public class LuaListener
         return true;
     }
 
-    // Synthesize OnRelease / OnLeave for a tracker that's no longer eligible —
-    // either because it died, became hidden, or moved out of bounds.
     private void ForceLeave(LuaInstance t)
     {
         if (pressed.Remove(t)) onReleaseSig.Fire(t.Table);
         if (hovered.Remove(t)) onLeaveSig.Fire(t.Table);
     }
 
-    // Drain all currently-active state. Used when the target itself disappears
-    // in Instance mode — every previously-overlapping tracker gets its OnLeave.
     private void DrainAll()
     {
         if (pressed.Count > 0)
@@ -153,10 +143,6 @@ public class LuaListener
         }
     }
 
-    // --------------------------------------------------------------------
-    // Mouse mode
-    // --------------------------------------------------------------------
-
     private void TickMouse()
     {
         var m = Mouse.current;
@@ -169,8 +155,6 @@ public class LuaListener
             var t = trackers[i];
             if (t == null) { trackers.RemoveAt(i); continue; }
 
-            // Tracker destroyed / hidden / not rendered / inactive — synthesize
-            // the exit transitions so subscribers stay paired up.
             if (!IsLive(t))
             {
                 ForceLeave(t);
@@ -192,7 +176,6 @@ public class LuaListener
                 continue;
             }
 
-            // Press transitions only fire while the cursor is over the tracker.
             if (hovered.Contains(t))
             {
                 if (leftDown && !wasPressed)
@@ -214,15 +197,16 @@ public class LuaListener
         var go = t.UnityObject;
         if (go == null) return false;
 
-        // UI: rect-contains test. ZIndex is intentionally ignored — anything
-        // you tracked counts as long as the pointer is inside its rect.
-        // (Visibility/active are already screened by IsLive.)
         if (go.TryGetComponent<RectTransform>(out var rt))
-            return RectTransformUtility.RectangleContainsScreenPoint(rt, screenPos, null);
+        {
 
-        // 3D: raycast from the main camera. We only count direct or
-        // descendant-collider hits so a tracked group still fires when the
-        // ray strikes any of its children.
+            var canvas = rt.GetComponentInParent<Canvas>();
+            UnityEngine.Camera uiCam = null;
+            if (canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+                uiCam = canvas.worldCamera != null ? canvas.worldCamera : UnityEngine.Camera.main;
+            return RectTransformUtility.RectangleContainsScreenPoint(rt, screenPos, uiCam);
+        }
+
         var cam = UnityEngine.Camera.main;
         if (cam == null) return false;
         var ray = cam.ScreenPointToRay(screenPos);
@@ -235,17 +219,10 @@ public class LuaListener
         return false;
     }
 
-    // --------------------------------------------------------------------
-    // Instance mode
-    // --------------------------------------------------------------------
-
     private void TickInstance()
     {
         if (target == null) return;
 
-        // Target destroyed / hidden / not rendered / inactive — drain every
-        // open hover so subscribers see a paired OnLeave for each prior OnEnter
-        // before the listener goes quiet.
         if (!IsLive(target))
         {
             DrainAll();
@@ -266,7 +243,7 @@ public class LuaListener
             }
 
             bool trackerIs2D = t.UnityObject.TryGetComponent<RectTransform>(out _);
-            // Per-spec: 2D-vs-3D never matches, regardless of world position.
+
             if (trackerIs2D != targetIs2D)
             {
                 ForceLeave(t);
@@ -291,8 +268,7 @@ public class LuaListener
 
     private static bool OverlapBounds(LuaInstance a, LuaInstance b)
     {
-        // GetComponentInChildren falls back to descendant Renderers so a tracked
-        // group still produces a meaningful bounding box.
+
         if (!a.UnityObject.TryGetComponent<Renderer>(out var rA))
             rA = a.UnityObject.GetComponentInChildren<Renderer>();
         if (!b.UnityObject.TryGetComponent<Renderer>(out var rB))

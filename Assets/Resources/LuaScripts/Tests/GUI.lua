@@ -1,5 +1,21 @@
 return function()
     -- =========================================================================
+    -- Visual anchor: a big white cube behind the on-screen GUI so the test is
+    -- obviously running when watched live.
+    -- =========================================================================
+    local backdrop = Instance.new("BasePart", game)
+    backdrop.Name = "GUIBackdrop"
+    backdrop.Render = true
+    backdrop.Size = Vector3.new(5, 5, 5)
+    backdrop.CFrame = CFrame.new(Vector3.new(0, 2.5, 0))
+    backdrop.Color = Color3.fromRGB(255, 255, 255)
+
+    local cam = game.CurrentCamera
+    if cam then
+        cam.CFrame = CFrame.LookAt(Vector3.new(0, 4, -12), Vector3.new(0, 2.5, 0))
+    end
+
+    -- =========================================================================
     -- GUIBase: Visible + ZIndex live on every GUI element.
     -- =========================================================================
     local frame = Instance.new("Frame", game)
@@ -127,7 +143,7 @@ return function()
     end
 
     -- If the project ships a Default shader, exercise the shader pipeline on a
-    -- Frame the same way Shadable.lua does for BaseCube.
+    -- Frame the same way Shadable.lua does for BasePart.
     local okShader, shader = pcall(function() return AssetService:GetShader("Default") end)
     if okShader and shader then
         frame:AddShader(shader)

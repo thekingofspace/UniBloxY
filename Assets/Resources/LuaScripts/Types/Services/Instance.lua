@@ -63,7 +63,7 @@ function InstanceBase:ClearAllChildren() end
 function InstanceBase:Destroy() end
 
 ---Clone returns a new instance of the same concrete class. Throws if the
----class is not clonable (most instances are not — only BaseCube, Folder,
+---class is not clonable (most instances are not — only BasePart, Folder,
 ---and RenderGroup are clonable in the current setup). Subclasses re-declare
 ---this method with their own return type so callers get the right class.
 ---@generic T : Instance

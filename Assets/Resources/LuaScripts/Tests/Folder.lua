@@ -6,14 +6,14 @@ return function()
     if folder.Parent ~= game then error("Folder Parent mismatch") end
 
     -- Folders organize children but render-state of children is unchanged.
-    local cube = Instance.new("BaseCube", folder)
+    local cube = Instance.new("BasePart", folder)
     cube.Name = "Inside"
     if folder:FindFirstChild("Inside") ~= cube then error("Folder child not findable") end
 
     -- Nested folders.
     local sub = Instance.new("Folder", folder)
     sub.Name = "Sub"
-    local cube2 = Instance.new("BaseCube", sub)
+    local cube2 = Instance.new("BasePart", sub)
     if folder:FindFirstChild("Sub") ~= sub then error("nested Folder lookup failed") end
 
     -- Reparenting.

@@ -15,8 +15,7 @@ public class AreaLight : LightElement
     protected override void ConfigureType(Light light)
     {
         light.type = LightType.Rectangle;
-        // Unity's rect/area lights only contribute via baking — RealTime=false
-        // is the meaningful default here, but we leave it driven by the user.
+
     }
 
     protected override void Apply(LightState s)

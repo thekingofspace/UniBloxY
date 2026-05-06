@@ -64,15 +64,15 @@ return function()
     area.Size = Vector2.new(2, 3)
     if area.Size ~= Vector2.new(2, 3) then error("AreaLight.Size round-trip failed") end
 
-    -- Lights must NOT be cloneable (only BaseCube, Folder, RenderGroup are).
+    -- Lights must NOT be cloneable (only BasePart, Folder, RenderGroup are).
     local cloneFailed = false
     local ok = pcall(function() global:Clone() end)
     if ok then error("GlobalLight should not be cloneable directly") end
 
     -- ---- Visual demo ---------------------------------------------------
-    -- BaseCube (and anything Renderable) defaults to Render=false, so we
+    -- BasePart (and anything Renderable) defaults to Render=false, so we
     -- have to opt the subject + pivot in or no GameObjects get created.
-    local subject = Instance.new("BaseCube", game)
+    local subject = Instance.new("BasePart", game)
     subject.Name = "LightSubject"
     subject.Render = true
     subject.Size = Vector3.new(3, 3, 3)
@@ -81,7 +81,7 @@ return function()
     -- A pivot cube whose CFrame drives the directional light's rotation.
     -- We need Render=true so the pivot has a Unity transform for the light
     -- to be reparented under. A tiny size keeps it visually negligible.
-    local pivot = Instance.new("BaseCube", game)
+    local pivot = Instance.new("BasePart", game)
     pivot.Name = "GlobalLightPivot"
     pivot.Render = true
     pivot.Size = Vector3.new(0.01, 0.01, 0.01)

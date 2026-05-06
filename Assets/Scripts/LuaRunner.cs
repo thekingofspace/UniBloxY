@@ -188,10 +188,6 @@ public class LuaRunner : MonoBehaviour
         return result;
     }
 
-    // ----------------------------------------------------------------------
-    // Error reporting
-    // ----------------------------------------------------------------------
-
     private static readonly Regex LocRegex =
         new Regex(@"^(?<src>[^:]+):\((?<line>\d+),(?<from>\d+)(?:-(?<to>\d+))?\):\s*(?<msg>.*)$",
             RegexOptions.Compiled);

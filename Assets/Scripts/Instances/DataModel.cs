@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using MoonSharp.Interpreter;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class DataModel : LuaInstanceClass
 {
@@ -18,8 +20,8 @@ public class DataModel : LuaInstanceClass
             var cn = args.Count > 2 ? args[2].String : null;
             if (string.IsNullOrEmpty(objName) || string.IsNullOrEmpty(cn))
                 throw new ScriptRuntimeException("ObjectAsInstance(name, className): both required");
-            var wrapper = WrapSceneObject(instance, objName, cn);
-            return wrapper != null ? DynValue.NewTable(wrapper.Table) : DynValue.Nil;
+            var created = WrapSceneObject(instance, objName, cn);
+            return created != null ? DynValue.NewTable(created.Table) : DynValue.Nil;
         });
 
         instance.Table["ConvertToInstance"] = DynValue.NewCallback((ctx, args) =>
@@ -32,7 +34,7 @@ public class DataModel : LuaInstanceClass
             GameObject[] roots;
             if (string.IsNullOrEmpty(entry))
             {
-                roots = UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects();
+                roots = SceneManager.GetActiveScene().GetRootGameObjects();
             }
             else
             {
@@ -41,14 +43,43 @@ public class DataModel : LuaInstanceClass
                 roots = new[] { root };
             }
 
-            var created = new System.Collections.Generic.List<LuaInstance>();
+            var created = new List<LuaInstance>();
             foreach (var go in roots)
-                ConvertRecursive(instance, go, instance, cb, created);
+                ConvertRecursive(instance, go, instance, cb, created, true);
 
-            var result = new Table(instance.Script);
-            for (int i = 0; i < created.Count; i++)
-                result[i + 1] = DynValue.NewTable(created[i].Table);
-            return DynValue.NewTable(result);
+            return BuildArray(instance.Script, created);
+        });
+
+        instance.Table["ImportScene"] = DynValue.NewCallback((ctx, args) =>
+        {
+            var sceneName = args.Count > 1 && args[1].Type == DataType.String ? args[1].String : null;
+            var cb = args.Count > 2 ? args[2] : null;
+            if (string.IsNullOrEmpty(sceneName))
+                throw new ScriptRuntimeException("ImportScene(sceneName, callback): sceneName required");
+            if (cb == null || cb.Type != DataType.Function)
+                throw new ScriptRuntimeException("ImportScene(sceneName, callback): callback function required");
+
+            var scene = SceneManager.GetSceneByName(sceneName);
+            if (!scene.isLoaded)
+            {
+                try
+                {
+                    SceneManager.LoadScene(sceneName, LoadSceneMode.Additive);
+                }
+                catch (System.Exception e)
+                {
+                    throw new ScriptRuntimeException($"ImportScene: failed to load scene \"{sceneName}\" — {e.Message}");
+                }
+                scene = SceneManager.GetSceneByName(sceneName);
+            }
+            if (!scene.IsValid())
+                throw new ScriptRuntimeException($"ImportScene: scene \"{sceneName}\" not found (is it in Build Settings?)");
+
+            var created = new List<LuaInstance>();
+            foreach (var go in scene.GetRootGameObjects())
+                ConvertRecursive(instance, go, instance, cb, created, true);
+
+            return BuildArray(instance.Script, created);
         });
     }
 
@@ -76,11 +107,25 @@ public class DataModel : LuaInstanceClass
         inst.SetParent(gameInstance);
     }
 
-    private void ConvertRecursive(LuaInstance gameInstance, GameObject go, LuaInstance parent, DynValue cb, System.Collections.Generic.List<LuaInstance> topLevel)
+    private static DynValue BuildArray(Script script, List<LuaInstance> list)
+    {
+        var t = new Table(script);
+        if (list != null)
+            for (int i = 0; i < list.Count; i++)
+                t[i + 1] = DynValue.NewTable(list[i].Table);
+        return DynValue.NewTable(t);
+    }
+
+    private void ConvertRecursive(
+        LuaInstance gameInstance,
+        GameObject go,
+        LuaInstance parent,
+        DynValue cb,
+        List<LuaInstance> topLevel,
+        bool topLevelOnly)
     {
         var ret = gameInstance.Script.Call(cb, go.name);
         var nextParent = parent;
-        LuaInstance created = null;
 
         if (ret.Type == DataType.String && !string.IsNullOrEmpty(ret.String))
         {
@@ -95,15 +140,15 @@ public class DataModel : LuaInstanceClass
             def.Initialize(inst);
             def.ImportFromUnityObject(inst, go);
             inst.SetParent(parent);
+            TransferTags(go, inst);
 
-            created = inst;
             nextParent = inst;
-            if (parent == gameInstance) topLevel.Add(inst);
+            if (!topLevelOnly || parent == gameInstance) topLevel.Add(inst);
         }
 
         var t = go.transform;
         for (int i = 0; i < t.childCount; i++)
-            ConvertRecursive(gameInstance, t.GetChild(i).gameObject, nextParent, cb, topLevel);
+            ConvertRecursive(gameInstance, t.GetChild(i).gameObject, nextParent, cb, topLevel, topLevelOnly);
     }
 
     private LuaInstance WrapSceneObject(LuaInstance gameInstance, string objName, string className)
@@ -115,12 +160,29 @@ public class DataModel : LuaInstanceClass
         var go = GameObject.Find(objName);
         if (go == null) return null;
 
+        if (go.transform.childCount > 0)
+            throw new ScriptRuntimeException(
+                $"ObjectAsInstance: \"{objName}\" has {go.transform.childCount} child object(s); " +
+                $"use game:ConvertToInstance(\"{objName}\", function(name) ... end) to wrap a subtree.");
+
         var inst = new LuaInstance(gameInstance.Script, className, objName);
         inst.ClassDef = def;
         inst.UnityObject = go;
         def.Initialize(inst);
         def.ImportFromUnityObject(inst, go);
         inst.SetParent(gameInstance);
+        TransferTags(go, inst);
         return inst;
+    }
+
+    private static void TransferTags(GameObject go, LuaInstance inst)
+    {
+        var tagger = go.GetComponent<LuaTags>();
+        if (tagger == null) return;
+        foreach (var entry in tagger.Entries)
+        {
+            if (string.IsNullOrEmpty(entry.Key)) continue;
+            inst.SetAttribute(entry.Key, DynValue.NewString(entry.Value ?? ""));
+        }
     }
 }

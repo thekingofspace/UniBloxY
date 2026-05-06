@@ -1,6 +1,6 @@
 ---@class CreatableInstances
 ---@field Folder Folder
----@field BaseCube BaseCube
+---@field BasePart BasePart
 ---@field RenderGroup RenderGroup
 ---@field GlobalLight GlobalLight
 ---@field PointLight PointLight
@@ -9,3 +9,5 @@
 ---@field Frame Frame
 ---@field TextLabel TextLabel
 ---@field ImageLabel ImageLabel
+---@field SurfaceGui SurfaceGui
+---@field BillboardGui BillboardGui

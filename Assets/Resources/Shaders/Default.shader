@@ -6,6 +6,13 @@ Shader "Custom/Default"
         _MainTex ("Main Texture", 2D) = "white" {}
         _Smoothness ("Smoothness", Range(0,1)) = 0.0
         _Metallic ("Metallic", Range(0,1)) = 0.0
+
+        // Blend state is exposed so BasePart.ApplyColor can flip a material between
+        // opaque (One/Zero, ZWrite On) and alpha-blended (SrcAlpha/OneMinusSrcAlpha,
+        // ZWrite Off) at runtime when Transparency changes.
+        [HideInInspector] _SrcBlend ("Src Blend", Float) = 1
+        [HideInInspector] _DstBlend ("Dst Blend", Float) = 0
+        [HideInInspector] _ZWrite   ("ZWrite",    Float) = 1
     }
     SubShader
     {
@@ -16,6 +23,9 @@ Shader "Custom/Default"
         {
             Name "ForwardLit"
             Tags { "LightMode"="UniversalForward" }
+
+            Blend [_SrcBlend] [_DstBlend]
+            ZWrite [_ZWrite]
 
             HLSLPROGRAM
             #pragma vertex vert

@@ -183,9 +183,6 @@ public abstract class ShadableUI : GUIBase
         return true;
     }
 
-    // UI Graphics only render through a single Material slot. We pick the most
-    // recently added shader instance, falling back to the most recent material,
-    // so AddShader/AddMaterial reads as "swap the active effect".
     protected static void ApplyMaterial(LuaInstance instance)
     {
         var go = instance.UnityObject;

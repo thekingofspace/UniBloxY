@@ -56,8 +56,7 @@ public class TextLabel : ShadableUI
         s.TextComp = go.AddComponent<Text>();
         if (s.Font == null)
         {
-            // Unity dropped Arial.ttf from builtin extras in newer versions —
-            // LegacyRuntime.ttf is the supported fallback; Arial.ttf still works on older Unity.
+
             var fallback = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
                         ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
             s.TextComp.font = fallback;
@@ -245,9 +244,6 @@ public class TextLabel : ShadableUI
         return base.TrySetProperty(instance, key, value);
     }
 
-    // Combine the two axis-strings back into a 9-corner preset name. Returns
-    // a hyphenated form ("Top-Left") only when no canonical preset matches —
-    // that way TextAlignment round-trips for sensible inputs.
     private static string JoinAlignment(string xAlign, string yAlign)
     {
         var x = (xAlign ?? "").ToLowerInvariant();

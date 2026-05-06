@@ -11,9 +11,7 @@ public abstract class GUIBase : LuaInstanceClass
         public bool Visible = true;
         public int ZIndex = 0;
         public LuaVector2 AnchorPoint = LuaVector2.Zero;
-        // Last Placement preset the user assigned. "Custom" means none / mixed
-        // (i.e. AnchorPoint or Position were set directly). The string is stored
-        // so reading Placement back is meaningful.
+
         public string Placement = "Custom";
     }
 
@@ -21,26 +19,17 @@ public abstract class GUIBase : LuaInstanceClass
     private static GUIData Get(LuaInstance instance) =>
         data.GetValue(instance, _ => new GUIData());
 
-    // We do our own Unity reparenting so a GUI without a UI ancestor lands
-    // under the auto-created root Canvas instead of the parent's plain GameObject.
     public override bool ParentsUnityObject => false;
 
     public bool GetVisible(LuaInstance instance) => Get(instance).Visible;
     public int GetZIndex(LuaInstance instance) => Get(instance).ZIndex;
     public static LuaVector2 GetAnchorPoint(LuaInstance instance) => Get(instance).AnchorPoint;
 
-    // ImportFromUnityObject in subclasses needs to seed AnchorPoint from the
-    // imported RectTransform's pivot.
     protected static void StoreAnchorPoint(LuaInstance instance, LuaVector2 ap) =>
         Get(instance).AnchorPoint = ap ?? LuaVector2.Zero;
 
-    // Subclasses owning Size/Position state override this to re-run GUIRect.Apply
-    // when something cross-cutting (currently AnchorPoint) changes.
     protected virtual void ReapplyRect(LuaInstance instance) {}
 
-    // Subclasses override to write into their state.Position. Used by Placement
-    // presets so the GUIBase layer can update both AnchorPoint and Position
-    // without knowing each subclass's internal State layout.
     protected virtual void SetPosition(LuaInstance instance, LuaUDim2 position) {}
 
     public static bool EffectiveVisible(LuaInstance instance)
@@ -123,9 +112,6 @@ public abstract class GUIBase : LuaInstanceClass
         return false;
     }
 
-    // Maps a preset name to the (Position scale, AnchorPoint) pair. Both share
-    // the same scale values: a TopLeft anchor sits at the parent's top-left,
-    // a Center anchor sits at the parent's center, etc.
     private static bool ResolvePlacement(string name, out float x, out float y, out string canonical)
     {
         x = 0f; y = 0f; canonical = null;
@@ -200,8 +186,6 @@ public abstract class GUIBase : LuaInstanceClass
         if (instance.Parent != null) ResortSiblings(instance.Parent);
     }
 
-    // UGUI draws by sibling order, so to honor ZIndex we sort the parent's
-    // GUI children by ZIndex (stable for ties) and replay SetSiblingIndex.
     private static readonly List<LuaInstance> sortBuffer = new();
     private static void ResortSiblings(LuaInstance parent)
     {
@@ -223,8 +207,6 @@ public abstract class GUIBase : LuaInstanceClass
         sortBuffer.Clear();
     }
 
-    // Subclasses call this after creating their UnityObject so we can do the
-    // initial parenting + visibility hookup uniformly.
     protected static void OnUnityObjectCreated(LuaInstance instance)
     {
         Reparent(instance);

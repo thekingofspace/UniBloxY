@@ -1,8 +1,6 @@
 using System;
 using MoonSharp.Interpreter;
 
-// ShaderService is now a thin shim over AssetService — asset loading was
-// moved into AssetService so other services can resolve shared assets.
 public class ShaderService : LuaService
 {
     public override void Register(Script script)

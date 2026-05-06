@@ -1,6 +1,6 @@
 return function()
-    -- A BaseCube is a Shadable, so we use it as the test subject.
-    local cube = Instance.new("BaseCube", game)
+    -- A BasePart is a Shadable, so we use it as the test subject.
+    local cube = Instance.new("BasePart", game)
     cube.Render = true   -- otherwise no Unity object is created and shaders have nothing to bind to
 
     -- Shadable methods exist.

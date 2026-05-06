@@ -63,8 +63,6 @@ public class LightingService : LuaService
 {
     private LuaPostProcessing post;
 
-    // Global volume properties (loose bag — not every project will use every key,
-    // but they're stored centrally so scripts can read/write them without errors).
     private LuaColor3 ambient = new(0.5f, 0.5f, 0.5f);
     private LuaColor3 fogColor = new(0.7f, 0.8f, 0.9f);
     private float fogStart = 50f;
@@ -108,9 +106,9 @@ public class LightingService : LuaService
 
         t["Raycast"] = DynValue.NewCallback((ctx, args) =>
         {
-            // Lighting:Raycast(start, direction [, params])  OR Lighting.Raycast(...)
+
             int i = 0;
-            if (args.Count > 0 && args[0].Type == DataType.Table) i = 1; // skip self
+            if (args.Count > 0 && args[0].Type == DataType.Table) i = 1;
             var startVal = args.Count > i ? args[i] : DynValue.Nil;
             var dirVal = args.Count > i + 1 ? args[i + 1] : DynValue.Nil;
             var paramVal = args.Count > i + 2 ? args[i + 2] : DynValue.Nil;
@@ -124,7 +122,6 @@ public class LightingService : LuaService
             return DoRaycast(script, startV, dirV, rp);
         });
 
-        // Volume / global properties
         var mt = new Table(script);
         mt["__type"] = "Lighting";
         mt["__index"] = (System.Func<DynValue, DynValue, DynValue>)((_, key) =>
@@ -200,9 +197,6 @@ public class LightingService : LuaService
         var origin = new Vector3(start.X, start.Y, start.Z);
         var dirRaw = new Vector3(direction.X, direction.Y, direction.Z);
 
-        // The user passes a "to" vector in the prompt — we treat the second
-        // vector as either a direction or a target by checking its magnitude.
-        // Here we treat it as direction; if magnitude is very large, normalize.
         var dir = dirRaw - origin;
         float distance = dir.magnitude;
         if (distance < 1e-6f)
@@ -224,7 +218,6 @@ public class LightingService : LuaService
             var h = hits[i];
             var go = h.collider != null ? h.collider.gameObject : null;
 
-            // Resolve to a LuaInstance if one owns this GameObject
             DynValue hitObj = DynValue.Nil;
             string unityName = null;
             var luaInst = ResolveLuaInstanceFor(go);

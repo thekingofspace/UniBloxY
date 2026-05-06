@@ -21,7 +21,7 @@ return function()
     if ok then error("OverrideParent = string must error") end
 
     -- Children of a RenderGroup are reachable like any Instance.
-    local cube = Instance.new("BaseCube", rg)
+    local cube = Instance.new("BasePart", rg)
     if rg:FindFirstChild(cube.Name) ~= cube then error("child lookup failed") end
 
     -- RenderGroup is clonable; the clone preserves OverrideParent.

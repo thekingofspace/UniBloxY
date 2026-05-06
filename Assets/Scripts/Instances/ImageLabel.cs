@@ -17,8 +17,7 @@ public class ImageLabel : ShadableUI
         public float ImageTransparency = 0f;
         public Image ImageComp;
         public string ScaleType = "Stretch";
-        // Crop mode renders a sub-rect of the source texture; we own this sprite
-        // so it must be destroyed when superseded or when the label exits the scene.
+
         public Sprite CroppedSprite;
     }
 
@@ -38,8 +37,7 @@ public class ImageLabel : ShadableUI
             d.ImageColor = s.ImageColor;
             d.ImageTransparency = s.ImageTransparency;
             d.ScaleType = s.ScaleType;
-            // CroppedSprite is intentionally not copied — it's recomputed per-instance
-            // from the rect aspect when ApplyImage runs on the clone.
+
         }
     }
 
@@ -54,7 +52,7 @@ public class ImageLabel : ShadableUI
         instance.UnityObject = go;
 
         OnUnityObjectCreated(instance);
-        // Layout first so ApplyImage's Crop mode can read the final rect size.
+
         GUIRect.Apply(rt, s.Size, s.Position, GetAnchorPoint(instance));
         ApplyImage(instance, s);
         ApplyMaterial(instance);
@@ -93,9 +91,6 @@ public class ImageLabel : ShadableUI
         s.ImageColor = new LuaColor3(c.r, c.g, c.b);
         s.ImageTransparency = 1f - c.a;
 
-        // Infer ScaleType from the imported Image's settings. Crop has no
-        // Unity-native equivalent, so we don't try to detect it — users can
-        // still set it explicitly afterwards.
         if (s.ImageComp.type == Image.Type.Tiled) s.ScaleType = "Tile";
         else if (s.ImageComp.preserveAspect)      s.ScaleType = "Fit";
         else                                      s.ScaleType = "Stretch";
@@ -108,8 +103,7 @@ public class ImageLabel : ShadableUI
         if (instance.UnityObject == null) return;
         var s = (State)instance.UserState;
         GUIRect.Apply((RectTransform)instance.UnityObject.transform, s.Size, s.Position, GetAnchorPoint(instance));
-        // Crop is the only mode whose rendering depends on the rect aspect, so
-        // re-derive the cropped sprite whenever layout changes under it.
+
         if (s.ScaleType == "Crop") ApplyImage(instance, s);
     }
 
@@ -204,13 +198,6 @@ public class ImageLabel : ShadableUI
     {
         if (s.ImageComp == null) return;
 
-        // Each mode picks the sprite + Image type that achieves its visual:
-        //   Stretch — fill the rect, no aspect preservation.
-        //   Fit     — preserveAspect = true, Image sits inside its rect with letterboxing.
-        //   Tile    — Image.type = Tiled, sprite repeats at native resolution.
-        //   Crop    — render a sub-rect of the source texture sized to match
-        //             the rect's aspect, then stretch it. Equivalent to CSS
-        //             "background-size: cover".
         Sprite display;
         switch (s.ScaleType)
         {
@@ -241,8 +228,7 @@ public class ImageLabel : ShadableUI
         }
 
         s.ImageComp.sprite = display;
-        // Without a sprite, Image draws a flat box — match TextLabel's "no
-        // background" by clearing alpha so an unset Image shows nothing.
+
         var alpha = (s.Image != null && display != null) ? (1f - s.ImageTransparency) : 0f;
         s.ImageComp.color = new Color(
             s.ImageColor.R, s.ImageColor.G, s.ImageColor.B, alpha);
@@ -264,8 +250,7 @@ public class ImageLabel : ShadableUI
         var rectSize = rt != null ? rt.rect.size : Vector2.zero;
         if (rectSize.x <= 0f || rectSize.y <= 0f)
         {
-            // No rect yet — fall back to the source sprite so the image is
-            // still visible. Crop will refresh in ReapplyRect once layout settles.
+
             DropCroppedSprite(s);
             return src;
         }
@@ -277,14 +262,14 @@ public class ImageLabel : ShadableUI
         Rect cropRect;
         if (imgAspect > rectAspect)
         {
-            // Image is wider than rect → trim left/right to match rect's aspect.
+
             var newWidth = srcRect.height * rectAspect;
             var x = srcRect.x + (srcRect.width - newWidth) * 0.5f;
             cropRect = new Rect(x, srcRect.y, newWidth, srcRect.height);
         }
         else
         {
-            // Image is taller than rect → trim top/bottom.
+
             var newHeight = srcRect.width / rectAspect;
             var y = srcRect.y + (srcRect.height - newHeight) * 0.5f;
             cropRect = new Rect(srcRect.x, y, srcRect.width, newHeight);

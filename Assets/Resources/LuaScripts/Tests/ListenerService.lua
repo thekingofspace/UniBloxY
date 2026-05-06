@@ -10,7 +10,7 @@ return function()
     end
     dotMouse:Destroy()
 
-    local dotTargetCube = Instance.new("BaseCube", game)
+    local dotTargetCube = Instance.new("BasePart", game)
     dotTargetCube.Render = true
     local dotInst = ListenerService.ListenToInstance(dotTargetCube)
     if dotInst.ClassName ~= "Listener" or dotInst.Mode ~= "Instance" then
@@ -63,7 +63,7 @@ return function()
     local okStrTarget = pcall(function() ListenerService.ListenToInstance("nope") end)
     if okStrTarget then error("ListenToInstance should reject string target") end
 
-    local target = Instance.new("BaseCube", game)
+    local target = Instance.new("BasePart", game)
     target.Render = true
     target.Size = Vector3.new(2, 2, 2)
     target.CFrame = CFrame.new(Vector3.new(0, 0, 0))
@@ -81,7 +81,7 @@ return function()
 
     -- Place an overlapping cube, register it as a tracker, then yield a couple
     -- of frames so ListenerService.Update has a chance to detect the overlap.
-    local intruder = Instance.new("BaseCube", game)
+    local intruder = Instance.new("BasePart", game)
     intruder.Render = true
     intruder.Size = Vector3.new(2, 2, 2)
     intruder.CFrame = CFrame.new(Vector3.new(0.5, 0, 0))
@@ -143,7 +143,7 @@ return function()
     local clean = ListenerService.ListenToInstance(target)
     local cleanLeft = 0
     clean.OnLeave:Connect(function() cleanLeft = cleanLeft + 1 end)
-    local rider = Instance.new("BaseCube", game)
+    local rider = Instance.new("BasePart", game)
     rider.Render = true
     rider.Size = Vector3.new(1, 1, 1)
     rider.CFrame = CFrame.new(Vector3.new(0, 0, 0))
@@ -159,7 +159,7 @@ return function()
     local trackerDeathLeft = 0
     trackerDeath.OnLeave:Connect(function() trackerDeathLeft = trackerDeathLeft + 1 end)
 
-    local doomed = Instance.new("BaseCube", game)
+    local doomed = Instance.new("BasePart", game)
     doomed.Render = true
     doomed.Size = Vector3.new(1, 1, 1)
     doomed.CFrame = CFrame.new(Vector3.new(0, 0, 0))
@@ -178,7 +178,7 @@ return function()
     local rendL = ListenerService.ListenToInstance(target)
     local rendLeft = 0
     rendL.OnLeave:Connect(function() rendLeft = rendLeft + 1 end)
-    local rendCube = Instance.new("BaseCube", game)
+    local rendCube = Instance.new("BasePart", game)
     rendCube.Render = true
     rendCube.Size = Vector3.new(1, 1, 1)
     rendCube.CFrame = CFrame.new(Vector3.new(0, 0, 0))
@@ -192,7 +192,7 @@ return function()
     -- =========================================================================
     -- Target destroyed mid-overlap: every open tracker gets an OnLeave drain.
     -- =========================================================================
-    local doomedTarget = Instance.new("BaseCube", game)
+    local doomedTarget = Instance.new("BasePart", game)
     doomedTarget.Render = true
     doomedTarget.Size = Vector3.new(2, 2, 2)
     doomedTarget.CFrame = CFrame.new(Vector3.new(20, 0, 0))
@@ -201,10 +201,10 @@ return function()
     local targetDeathLeft = 0
     targetDeath.OnLeave:Connect(function() targetDeathLeft = targetDeathLeft + 1 end)
 
-    local riderA = Instance.new("BaseCube", game)
+    local riderA = Instance.new("BasePart", game)
     riderA.Render = true; riderA.Size = Vector3.new(1, 1, 1)
     riderA.CFrame = CFrame.new(Vector3.new(20, 0, 0))
-    local riderB = Instance.new("BaseCube", game)
+    local riderB = Instance.new("BasePart", game)
     riderB.Render = true; riderB.Size = Vector3.new(1, 1, 1)
     riderB.CFrame = CFrame.new(Vector3.new(20.5, 0, 0))
 

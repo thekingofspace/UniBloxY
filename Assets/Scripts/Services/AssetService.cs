@@ -111,8 +111,6 @@ public class AssetService : LuaService
         if (imageCache.TryGetValue(name, out var existing))
             return existing;
 
-        // Prefer Sprite assets so Image components can use them directly;
-        // fall back to a Texture2D wrapped in a runtime sprite.
         var sprite = Resources.Load<Sprite>("Images/" + name);
         LuaImage wrapper;
         if (sprite != null)

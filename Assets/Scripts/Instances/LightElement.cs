@@ -3,8 +3,7 @@ using UnityEngine;
 
 public abstract class LightElement : LuaInstanceClass
 {
-    // Lights follow their parent's Unity transform — this lets the parent's
-    // CFrame drive the light's world position/rotation.
+
     public override bool ParentsUnityObject => true;
 
     protected class LightState
@@ -13,7 +12,7 @@ public abstract class LightElement : LuaInstanceClass
         public float Intensity = 1f;
         public float Range = 10f;
         public float Brightness = 1f;
-        public string ShadowType = "Soft";   // "Soft" | "Realistic"
+        public string ShadowType = "Soft";
         public bool Active = true;
         public bool RealTime = true;
         public float NearPlane = 0.2f;
@@ -35,9 +34,6 @@ public abstract class LightElement : LuaInstanceClass
         var s = (LightState)instance.UserState;
         if (s.Owner != null) return;
 
-        // If an UnityObject was already attached (via ObjectAsInstance /
-        // ConvertToInstance), bind to the existing GameObject + Light
-        // component instead of creating a fresh one.
         GameObject go;
         if (instance.UnityObject != null)
         {
@@ -60,8 +56,7 @@ public abstract class LightElement : LuaInstanceClass
 
     public override void ImportFromUnityObject(LuaInstance instance, GameObject go)
     {
-        // Read existing properties off the GameObject's Light component so
-        // wrapping a scene light reflects its current configuration.
+
         var s = (LightState)instance.UserState;
         var light = go.GetComponent<Light>();
         if (light == null) return;
@@ -78,10 +73,7 @@ public abstract class LightElement : LuaInstanceClass
 
     public override void OnAncestryChanged(LuaInstance instance)
     {
-        // Lights take their world placement from the parent. After a
-        // reparent, snap the local transform to identity so the light's
-        // world rotation matches the new parent's (instead of preserving
-        // its old world rotation, which is Unity's default for SetParent).
+
         if (instance.UnityObject != null)
         {
             instance.UnityObject.transform.localPosition = UnityEngine.Vector3.zero;

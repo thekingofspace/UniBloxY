@@ -63,10 +63,7 @@ public class Camera : LuaInstanceClass
 
         instance.Table["SetFullScreen"] = DynValue.NewCallback((ctx, args) =>
         {
-            // (mode [, width, height])
-            //   "borderless" → FullScreenWindow (no border, desktop res by default)
-            //   "fullscreen" / "exclusive" → ExclusiveFullScreen
-            //   "windowed" / "border" → Windowed; width/height optional
+
             string mode = args.Count > 1 && args[1].Type == DataType.String
                 ? args[1].String.ToLowerInvariant() : "borderless";
 
@@ -165,6 +162,10 @@ public class Camera : LuaInstanceClass
         {
             cam = existing;
             go = existing.gameObject;
+            // Ensure the camera is tagged MainCamera so UnityEngine.Camera.main
+            // resolves to it. Without this, downstream consumers that read
+            // Camera.main (e.g. BillboardFollower) get null and silently fail.
+            if (go.tag != "MainCamera") go.tag = "MainCamera";
             var t = go.transform;
             s.CFrame = new LuaCFrame(
                 new LuaVector3(t.position.x, t.position.y, t.position.z),
@@ -185,7 +186,6 @@ public class Camera : LuaInstanceClass
         instance.UnityObject = go;
         ApplyTransform(s);
 
-        // Polls Screen size each Update and fires WindowResized when it changes.
         s.Watcher = go.GetComponent<CameraResizeWatcher>() ?? go.AddComponent<CameraResizeWatcher>();
         s.Watcher.Bind(s);
     }
