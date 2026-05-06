@@ -16,6 +16,10 @@ public class CachedModel : Renderable
         public LuaMesh Model;
         public LuaMaterial Material;
         public LuaTexture Texture;
+        // One-shot Object.Instantiate source captured on Clone via CopyState.
+        // CreatePart pops it and instantiates from it instead of building a
+        // fresh GameObject + MeshFilter + MeshRenderer.
+        public GameObject Template;
     }
 
     public override void Initialize(LuaInstance instance)
@@ -36,6 +40,10 @@ public class CachedModel : Renderable
             dst.Model = src.Model;
             dst.Material = src.Material;
             dst.Texture = src.Texture;
+            // Mirror BasePart's clone-template hand-off so CachedModel clones
+            // also Object.Instantiate from the source GameObject instead of
+            // rebuilding mesh-renderer scaffolding from scratch.
+            if (source.UnityObject != null) dst.Template = source.UnityObject;
         }
     }
 
@@ -143,10 +151,23 @@ public class CachedModel : Renderable
 
     private static void CreatePart(LuaInstance instance, State s)
     {
-        var go = new GameObject(instance.Name);
-        var mf = go.AddComponent<MeshFilter>();
-        go.AddComponent<MeshRenderer>();
-        if (s.Model != null) mf.sharedMesh = s.Model.Mesh;
+        // Pop the one-shot clone template (null if none / source destroyed).
+        var template = s.Template;
+        s.Template = null;
+
+        GameObject go;
+        if (template != null)
+        {
+            go = Object.Instantiate(template);
+            go.name = instance.Name;
+        }
+        else
+        {
+            go = new GameObject(instance.Name);
+            var mf = go.AddComponent<MeshFilter>();
+            go.AddComponent<MeshRenderer>();
+            if (s.Model != null) mf.sharedMesh = s.Model.Mesh;
+        }
         instance.UnityObject = go;
 
         ApplyMaterial(instance, s);

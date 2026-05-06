@@ -17,6 +17,17 @@ public abstract class Renderable : LuaInstanceClass
 
     public void SetRender(LuaInstance instance, bool value) => Get(instance).Render = value;
 
+    public override void CopyState(LuaInstance source, LuaInstance target)
+    {
+        base.CopyState(source, target);
+        // Carry the Render flag onto the clone so a clone of a rendered
+        // source is itself rendered without the script having to re-assert
+        // .Render = true after every Clone(). Pairs with the BasePart /
+        // CachedModel template hand-off so the clone reuses the source's
+        // GameObject via Object.Instantiate.
+        Get(target).Render = Get(source).Render;
+    }
+
     public static bool EffectiveRender(LuaInstance instance)
     {
         var node = instance;

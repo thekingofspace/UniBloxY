@@ -23,6 +23,23 @@ public class LuaListener
     private readonly HashSet<LuaInstance> hovered = new();
     private readonly HashSet<LuaInstance> pressed = new();
 
+    // Per-tracker hit-test cache. Resolving the tracker's UI canvas, world
+    // renderer or RectTransform every Tick was the bulk of TickMouse's cost
+    // because GetComponentInParent / GetComponentInChildren walk the
+    // transform tree. We resolve them lazily and reset the cache when the
+    // tracker's GameObject changes.
+    private class HitCache
+    {
+        public GameObject Resolved;
+        public RectTransform Rect;
+        public bool RectMissing;
+        public Canvas Canvas;
+        public bool CanvasResolved;
+        public Renderer Renderer;
+        public bool RendererResolved;
+    }
+    private readonly Dictionary<LuaInstance, HitCache> hitCache = new();
+
     private readonly Signal onEnterSig;
     private readonly Signal onLeaveSig;
     private readonly Signal onActivatedSig;
@@ -73,7 +90,18 @@ public class LuaListener
 
         if (pressed.Remove(inst)) onReleaseSig.Fire(inst.Table);
         if (hovered.Remove(inst)) onLeaveSig.Fire(inst.Table);
+        hitCache.Remove(inst);
         return trackers.Remove(inst);
+    }
+
+    private HitCache GetCache(LuaInstance inst, GameObject go)
+    {
+        if (!hitCache.TryGetValue(inst, out var c) || c.Resolved != go)
+        {
+            c = new HitCache { Resolved = go };
+            hitCache[inst] = c;
+        }
+        return c;
     }
 
     public DynValue GetTrackers()
@@ -95,6 +123,7 @@ public class LuaListener
         pressed.Clear();
         hovered.Clear();
         trackers.Clear();
+        hitCache.Clear();
         Destroyed = true;
     }
 
@@ -157,6 +186,7 @@ public class LuaListener
 
             if (!IsLive(t))
             {
+                hitCache.Remove(t);
                 ForceLeave(t);
                 continue;
             }
@@ -192,19 +222,30 @@ public class LuaListener
         }
     }
 
-    private static bool MouseHits(LuaInstance t, Vector2 screenPos)
+    private bool MouseHits(LuaInstance t, Vector2 screenPos)
     {
         var go = t.UnityObject;
         if (go == null) return false;
 
-        if (go.TryGetComponent<RectTransform>(out var rt))
-        {
+        var cache = GetCache(t, go);
 
-            var canvas = rt.GetComponentInParent<Canvas>();
+        if (!cache.RectMissing && cache.Rect == null)
+        {
+            if (go.TryGetComponent<RectTransform>(out var rt)) cache.Rect = rt;
+            else cache.RectMissing = true;
+        }
+
+        if (cache.Rect != null)
+        {
+            if (!cache.CanvasResolved)
+            {
+                cache.Canvas = cache.Rect.GetComponentInParent<Canvas>();
+                cache.CanvasResolved = true;
+            }
             UnityEngine.Camera uiCam = null;
-            if (canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
-                uiCam = canvas.worldCamera != null ? canvas.worldCamera : UnityEngine.Camera.main;
-            return RectTransformUtility.RectangleContainsScreenPoint(rt, screenPos, uiCam);
+            if (cache.Canvas != null && cache.Canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+                uiCam = cache.Canvas.worldCamera != null ? cache.Canvas.worldCamera : UnityEngine.Camera.main;
+            return RectTransformUtility.RectangleContainsScreenPoint(cache.Rect, screenPos, uiCam);
         }
 
         var cam = UnityEngine.Camera.main;
@@ -229,7 +270,13 @@ public class LuaListener
             return;
         }
 
-        bool targetIs2D = target.UnityObject.TryGetComponent<RectTransform>(out _);
+        var targetCache = GetCache(target, target.UnityObject);
+        if (!targetCache.RectMissing && targetCache.Rect == null)
+        {
+            if (target.UnityObject.TryGetComponent<RectTransform>(out var trt)) targetCache.Rect = trt;
+            else targetCache.RectMissing = true;
+        }
+        bool targetIs2D = targetCache.Rect != null;
 
         for (int i = trackers.Count - 1; i >= 0; i--)
         {
@@ -238,11 +285,18 @@ public class LuaListener
 
             if (!IsLive(t))
             {
+                hitCache.Remove(t);
                 ForceLeave(t);
                 continue;
             }
 
-            bool trackerIs2D = t.UnityObject.TryGetComponent<RectTransform>(out _);
+            var trackerCache = GetCache(t, t.UnityObject);
+            if (!trackerCache.RectMissing && trackerCache.Rect == null)
+            {
+                if (t.UnityObject.TryGetComponent<RectTransform>(out var rt)) trackerCache.Rect = rt;
+                else trackerCache.RectMissing = true;
+            }
+            bool trackerIs2D = trackerCache.Rect != null;
 
             if (trackerIs2D != targetIs2D)
             {
@@ -250,7 +304,9 @@ public class LuaListener
                 continue;
             }
 
-            bool overlap = targetIs2D ? OverlapRect(t, target) : OverlapBounds(t, target);
+            bool overlap = targetIs2D
+                ? OverlapRect(trackerCache.Rect, targetCache.Rect)
+                : OverlapBounds(trackerCache, t.UnityObject, targetCache, target.UnityObject);
             bool wasHovering = hovered.Contains(t);
 
             if (overlap && !wasHovering)
@@ -266,13 +322,20 @@ public class LuaListener
         }
     }
 
-    private static bool OverlapBounds(LuaInstance a, LuaInstance b)
+    private static Renderer ResolveRenderer(HitCache cache, GameObject go)
     {
+        if (cache.RendererResolved) return cache.Renderer;
+        if (!go.TryGetComponent<Renderer>(out var r))
+            r = go.GetComponentInChildren<Renderer>();
+        cache.Renderer = r;
+        cache.RendererResolved = true;
+        return r;
+    }
 
-        if (!a.UnityObject.TryGetComponent<Renderer>(out var rA))
-            rA = a.UnityObject.GetComponentInChildren<Renderer>();
-        if (!b.UnityObject.TryGetComponent<Renderer>(out var rB))
-            rB = b.UnityObject.GetComponentInChildren<Renderer>();
+    private static bool OverlapBounds(HitCache cacheA, GameObject goA, HitCache cacheB, GameObject goB)
+    {
+        var rA = ResolveRenderer(cacheA, goA);
+        var rB = ResolveRenderer(cacheB, goB);
         if (rA == null || rB == null) return false;
         return rA.bounds.Intersects(rB.bounds);
     }
@@ -280,10 +343,9 @@ public class LuaListener
     private static readonly Vector3[] cornerScratchA = new Vector3[4];
     private static readonly Vector3[] cornerScratchB = new Vector3[4];
 
-    private static bool OverlapRect(LuaInstance a, LuaInstance b)
+    private static bool OverlapRect(RectTransform rtA, RectTransform rtB)
     {
-        if (!a.UnityObject.TryGetComponent<RectTransform>(out var rtA)) return false;
-        if (!b.UnityObject.TryGetComponent<RectTransform>(out var rtB)) return false;
+        if (rtA == null || rtB == null) return false;
 
         rtA.GetWorldCorners(cornerScratchA);
         rtB.GetWorldCorners(cornerScratchB);

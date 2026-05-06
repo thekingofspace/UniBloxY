@@ -82,6 +82,7 @@ public class AssetService : LuaService
         var mat = new Material(shader.Shader) { name = materialName ?? shaderName };
         var key = materialName ?? ($"_runtime:{shaderName}:{Guid.NewGuid():N}");
         var wrapper = new LuaMaterial(key, mat);
+        wrapper.MarkSourceOwned();
         if (!string.IsNullOrEmpty(materialName))
             materialCache[materialName] = wrapper;
         return wrapper;

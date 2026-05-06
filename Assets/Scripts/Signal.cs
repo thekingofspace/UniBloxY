@@ -25,6 +25,14 @@ public class SignalConnection
         Connected = false;
         signal.Remove(this);
     }
+
+    // Used by Signal.Clear to flag every connection as severed in one pass
+    // without each one re-entering Signal.Remove on the list we're clearing.
+    internal void MarkDisconnected()
+    {
+        Connected = false;
+        Callback = null;
+    }
 }
 
 public class Signal
@@ -35,6 +43,13 @@ public class Signal
     private readonly string label;
     private readonly List<SignalConnection> connections = new List<SignalConnection>();
     private readonly List<LuaCoroutine> waiters = new List<LuaCoroutine>();
+
+    // Reused snapshot to avoid allocating a fresh array on every Fire. A flag
+    // guards against reentrancy — if a callback fires the same signal again,
+    // the inner call falls back to a one-shot list so it doesn't clobber the
+    // outer iteration.
+    private readonly List<SignalConnection> firingBuffer = new List<SignalConnection>();
+    private bool firingBufferInUse;
 
     public Signal(Script script, string label)
     {
@@ -82,24 +97,61 @@ public class Signal
         connections.Remove(c);
     }
 
+    // Drops every active connection and pending waiter. Called when the owning
+    // instance is destroyed so callbacks (and any state they captured) can be
+    // collected even if external Lua code still holds a reference to the
+    // destroyed instance.
+    public void Clear()
+    {
+        for (int i = 0; i < connections.Count; i++)
+            connections[i].MarkDisconnected();
+        connections.Clear();
+        waiters.Clear();
+    }
+
     public void Fire(params object[] args)
     {
         if (connections.Count > 0)
         {
-            var snapshot = connections.ToArray();
-            for (int i = 0; i < snapshot.Length; i++)
+            List<SignalConnection> snap;
+            bool ownsBuffer = !firingBufferInUse;
+            if (ownsBuffer)
             {
-                var c = snapshot[i];
-                if (!c.Connected) continue;
-                if (c.IsOnce) c.Disconnect();
-                try
+                snap = firingBuffer;
+                snap.Clear();
+                firingBufferInUse = true;
+            }
+            else
+            {
+                snap = new List<SignalConnection>(connections.Count);
+            }
+
+            try
+            {
+                for (int i = 0; i < connections.Count; i++) snap.Add(connections[i]);
+                int count = snap.Count;
+                for (int i = 0; i < count; i++)
                 {
-                    var co = script.CreateCoroutine(DynValue.NewClosure(c.Callback));
-                    co.Coroutine.Resume(args);
+                    var c = snap[i];
+                    if (!c.Connected) continue;
+                    if (c.IsOnce) c.Disconnect();
+                    try
+                    {
+                        var co = script.CreateCoroutine(DynValue.NewClosure(c.Callback));
+                        co.Coroutine.Resume(args);
+                    }
+                    catch (ScriptRuntimeException ex)
+                    {
+                        Debug.LogError($"{label}: {ex.DecoratedMessage}");
+                    }
                 }
-                catch (ScriptRuntimeException ex)
+            }
+            finally
+            {
+                if (ownsBuffer)
                 {
-                    Debug.LogError($"{label}: {ex.DecoratedMessage}");
+                    snap.Clear();
+                    firingBufferInUse = false;
                 }
             }
         }

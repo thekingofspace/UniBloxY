@@ -18,6 +18,12 @@ public abstract class LuaInstanceClass
     public virtual void OnEnterScene(LuaInstance instance) { }
     public virtual void OnExitScene(LuaInstance instance) { }
 
+    // Called once from LuaInstance.Destroy after the Destroying signal fires
+    // and before children are recursed. Use it to release native resources
+    // (Materials, Meshes, RenderTextures, etc.) that wouldn't otherwise be
+    // collected when the C# wrapper is GC'd.
+    public virtual void OnDestroy(LuaInstance instance) { }
+
     public virtual void OnChildAdded(LuaInstance instance, LuaInstance child) { }
     public virtual void OnChildRemoved(LuaInstance instance, LuaInstance child) { }
 

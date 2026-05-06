@@ -48,11 +48,11 @@ public class Camera : LuaInstanceClass
         instance.Table["GetViewSize"] = DynValue.NewCallback((ctx, args) =>
         {
             var st = (State)instance.UserState;
+            // Skip the implicit `self` table when called as cam:GetViewSize(d).
+            int start = (args.Count > 0 && args[0].Type == DataType.Table) ? 1 : 0;
             float distance = 10f;
-            if (args.Count >= 1 && args[0].Type == DataType.Number)
-                distance = (float)args[0].Number;
-            else if (args.Count >= 2 && args[1].Type == DataType.Number)
-                distance = (float)args[1].Number;
+            if (args.Count > start && args[start].Type == DataType.Number)
+                distance = (float)args[start].Number;
 
             float aspect = GetAspect(st);
             float fov = st.FOV;

@@ -534,6 +534,9 @@ public class LuaInstance
             throw new ScriptRuntimeException($"{className} \"{name}\" cannot be destroyed");
         destroying?.Fire(table);
         destroyed = true;
+
+        ClassDef?.OnDestroy(this);
+
         SetParent(null);
         var snap = children.ToArray();
         for (int i = 0; i < snap.Length; i++) snap[i].Destroy();
@@ -542,5 +545,24 @@ public class LuaInstance
             UnityEngine.Object.Destroy(UnityObject);
             UnityObject = null;
         }
+
+        ClearSignals();
+    }
+
+    // Drop every signal connection and pending Wait so external Lua references
+    // to this destroyed instance don't keep its callbacks (and their captured
+    // upvalues) alive forever.
+    private void ClearSignals()
+    {
+        changed.Clear();
+        childAdded?.Clear();
+        childRemoved?.Clear();
+        ancestryChanged?.Clear();
+        attributeChangedAny?.Clear();
+        destroying?.Clear();
+        foreach (var sig in propertyChangedSignals.Values) sig.Clear();
+        foreach (var sig in attributeChangedSignals.Values) sig.Clear();
+        propertyChangedSignals.Clear();
+        attributeChangedSignals.Clear();
     }
 }

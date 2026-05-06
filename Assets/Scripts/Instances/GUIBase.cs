@@ -187,6 +187,13 @@ public abstract class GUIBase : LuaInstanceClass
     }
 
     private static readonly List<LuaInstance> sortBuffer = new();
+    private static readonly System.Comparison<LuaInstance> zIndexComparison = CompareZIndex;
+    private static int CompareZIndex(LuaInstance a, LuaInstance b)
+    {
+        int za = ((GUIBase)a.ClassDef).GetZIndex(a);
+        int zb = ((GUIBase)b.ClassDef).GetZIndex(b);
+        return za.CompareTo(zb);
+    }
     private static void ResortSiblings(LuaInstance parent)
     {
         sortBuffer.Clear();
@@ -196,12 +203,7 @@ public abstract class GUIBase : LuaInstanceClass
             if (c.ClassDef is GUIBase && c.UnityObject != null)
                 sortBuffer.Add(c);
         }
-        sortBuffer.Sort((a, b) =>
-        {
-            int za = ((GUIBase)a.ClassDef).GetZIndex(a);
-            int zb = ((GUIBase)b.ClassDef).GetZIndex(b);
-            return za.CompareTo(zb);
-        });
+        sortBuffer.Sort(zIndexComparison);
         for (int i = 0; i < sortBuffer.Count; i++)
             sortBuffer[i].UnityObject.transform.SetSiblingIndex(i);
         sortBuffer.Clear();

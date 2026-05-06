@@ -20,6 +20,13 @@ public class BasePart : Shadable
             dst.Color = src.Color;
             dst.Transparency = src.Transparency;
             dst.Material = src.Material;
+            // Capture the source's already-built GameObject as a one-shot
+            // template so the clone's BuildGameObject can Object.Instantiate
+            // it instead of running CreatePrimitive (+ collider) and the
+            // associated AddComponent calls from scratch. Consumed and
+            // cleared on first scene-entry; re-Render after that point goes
+            // through the normal build path.
+            if (source.UnityObject != null) dst.Template = source.UnityObject;
         }
     }
 
@@ -40,6 +47,15 @@ public class BasePart : Shadable
         // actually changes — letting per-frame transparency tweens just
         // update the color without touching keywords.
         public int BlendMode = -1;
+        // The Material we created and assigned to the renderer's primary slot
+        // (either a LuaMaterial-backed instance or a fresh default-shader
+        // Material). Tracked here so DestroyUnityObject can release it before
+        // the GameObject goes away.
+        public Material PrimaryRenderMaterial;
+        // One-shot Object.Instantiate source captured on Clone via CopyState.
+        // BuildGameObject pops it (so subsequent rebuilds don't reuse a stale
+        // reference) and instantiates from it instead of building fresh.
+        public GameObject Template;
     }
 
     public override void Initialize(LuaInstance instance)
@@ -203,7 +219,19 @@ public class BasePart : Shadable
 
     protected virtual GameObject BuildGameObject(LuaInstance instance, State s)
     {
+        var template = TakeTemplate(s);
+        if (template != null) return Object.Instantiate(template);
         return GameObject.CreatePrimitive(ShapeToPrimitive(s.Shape));
+    }
+
+    // Pop the one-shot template captured by CopyState. Returns null if either
+    // none was captured or the source GameObject has since been destroyed
+    // (Unity's overloaded equality returns true for destroyed Objects).
+    protected static GameObject TakeTemplate(State s)
+    {
+        var t = s.Template;
+        s.Template = null;
+        return t != null ? t : null;
     }
 
     protected virtual void OnUnityObjectCreated(LuaInstance instance, GameObject go)
@@ -212,16 +240,19 @@ public class BasePart : Shadable
         if (renderer == null) return;
 
         var s = (State)instance.UserState;
+        Material primary;
         if (s.Material != null && s.Material.Source != null)
         {
-            renderer.sharedMaterial = s.Material.CreateInstance();
+            primary = s.Material.CreateInstance();
         }
         else
         {
             if (defaultShader == null)
                 defaultShader = Resources.Load<Shader>("Shaders/Default");
-            renderer.sharedMaterial = defaultShader != null ? new Material(defaultShader) : null;
+            primary = defaultShader != null ? new Material(defaultShader) : null;
         }
+        s.PrimaryRenderMaterial = primary;
+        renderer.sharedMaterial = primary;
     }
 
     private static void CreatePart(LuaInstance instance, State s)
@@ -239,15 +270,26 @@ public class BasePart : Shadable
 
     private static void DestroyUnityObject(LuaInstance instance)
     {
+        if (instance.UserState is State s)
+        {
+            if (s.PrimaryRenderMaterial != null)
+            {
+                // Drop from LuaMaterial bookkeeping so it stops being applied
+                // to a destroyed material on future Lua-side mutations.
+                s.Material?.DropInstance(s.PrimaryRenderMaterial);
+                Object.Destroy(s.PrimaryRenderMaterial);
+                s.PrimaryRenderMaterial = null;
+            }
+            // Fresh GameObject + materials on the next render — force the next
+            // ApplyColor to re-run the blend/keyword setup instead of trusting
+            // the cached flag from the destroyed renderer.
+            s.BlendMode = -1;
+        }
         if (instance.UnityObject != null)
         {
             Object.Destroy(instance.UnityObject);
             instance.UnityObject = null;
         }
-        // Fresh GameObject + materials on the next render — force the next
-        // ApplyColor to re-run the blend/keyword setup instead of trusting
-        // the cached flag from the destroyed renderer.
-        if (instance.UserState is State s) s.BlendMode = -1;
     }
 
     private static void ApplyTransform(LuaInstance instance, State s)
@@ -261,6 +303,12 @@ public class BasePart : Shadable
         go.transform.localScale = new Vector3(s.Size.X, s.Size.Y, s.Size.Z);
     }
 
+    // Reused buffer for renderer.GetSharedMaterials. The Renderer.sharedMaterials
+    // *property* allocates a fresh Material[] on every read, which adds up fast
+    // when Lua tweens Color/Transparency every frame.
+    private static readonly System.Collections.Generic.List<Material> matBuffer
+        = new System.Collections.Generic.List<Material>(4);
+
     private static void ApplyColor(LuaInstance instance, State s)
     {
         var go = instance.UnityObject;
@@ -268,14 +316,14 @@ public class BasePart : Shadable
         var renderer = go.GetComponent<Renderer>();
         if (renderer == null) return;
 
-        var mats = renderer.sharedMaterials;
+        renderer.GetSharedMaterials(matBuffer);
         var color = new Color(s.Color.R, s.Color.G, s.Color.B, 1f - s.Transparency);
         int wantMode = s.Transparency > 0f ? 1 : 0;
         bool modeChanged = wantMode != s.BlendMode;
 
-        for (int i = 0; i < mats.Length; i++)
+        for (int i = 0; i < matBuffer.Count; i++)
         {
-            var m = mats[i];
+            var m = matBuffer[i];
             if (m == null) continue;
 
             // Color always updates — this is the hot path for fade tweens.
@@ -318,6 +366,9 @@ public class BasePart : Shadable
         }
 
         s.BlendMode = wantMode;
+        // Don't keep references to the renderer's materials in a static buffer
+        // between calls — they may be destroyed before the next ApplyColor.
+        matBuffer.Clear();
     }
 
     private static UnityEngine.PrimitiveType ShapeToPrimitive(PartShape shape)

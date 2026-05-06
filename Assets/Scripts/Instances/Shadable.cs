@@ -209,7 +209,9 @@ public abstract class Shadable : Renderable
         var idx = d.Shaders.IndexOf(shader);
         if (idx < 0) return false;
         d.Shaders.RemoveAt(idx);
+        var inst = d.ShaderInstances[idx];
         d.ShaderInstances.RemoveAt(idx);
+        if (inst != null) Object.Destroy(inst);
         ApplyAll(instance);
         return true;
     }
@@ -233,9 +235,33 @@ public abstract class Shadable : Renderable
         {
             material.DropInstance(inst);
             d.MaterialInstances.Remove(material);
+            if (inst != null) Object.Destroy(inst);
         }
         ApplyAll(instance);
         return true;
+    }
+
+    public override void OnDestroy(LuaInstance instance)
+    {
+        if (!data.TryGetValue(instance, out var d)) return;
+
+        for (int i = 0; i < d.ShaderInstances.Count; i++)
+        {
+            var inst = d.ShaderInstances[i];
+            if (inst != null) Object.Destroy(inst);
+        }
+        d.ShaderInstances.Clear();
+        d.Shaders.Clear();
+
+        foreach (var pair in d.MaterialInstances)
+        {
+            pair.Key?.DropInstance(pair.Value);
+            if (pair.Value != null) Object.Destroy(pair.Value);
+        }
+        d.MaterialInstances.Clear();
+        d.Materials.Clear();
+        d.OriginalMaterials = null;
+        d.OriginalCaptured = false;
     }
 
     private static void ApplyAll(LuaInstance instance)

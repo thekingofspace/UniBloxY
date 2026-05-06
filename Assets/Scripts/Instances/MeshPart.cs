@@ -28,6 +28,12 @@ public class MeshPart : BasePart
 
     protected override GameObject BuildGameObject(LuaInstance instance, State s)
     {
+        // Clone-time template wins over the skeleton/mesh build path so the
+        // entire bone/skin hierarchy is duplicated in one Instantiate call
+        // instead of being rebuilt + reskinned per spawn.
+        var template = TakeTemplate(s);
+        if (template != null) return Object.Instantiate(template);
+
         var d = GetMeshData(instance);
 
         if (d.Skeleton != null && d.Skeleton.Prefab != null)

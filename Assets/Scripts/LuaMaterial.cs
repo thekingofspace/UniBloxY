@@ -7,13 +7,34 @@ public class LuaMaterial
 {
     public string ClassName => "Material";
     public string Name { get; }
-    [MoonSharpHidden] public Material Source { get; }
+    // Source starts as the asset reference (e.g. from Resources.Load). The first
+    // time anything tries to mutate it, WritableSource clones it so the asset
+    // itself is never modified. From that point on Source is a runtime-owned
+    // working copy and CreateInstance/CloneInstance pick up the latest state.
+    [MoonSharpHidden] public Material Source { get; private set; }
     [MoonSharpHidden] private readonly List<Material> instances = new();
+    private bool sourceIsOwned;
 
     public LuaMaterial(string name, Material source)
     {
         Name = name;
         Source = source;
+    }
+
+    // Marks Source as already-owned (no clone needed). Used by AssetService
+    // when it constructs a fresh runtime Material via CreateMaterial.
+    [MoonSharpHidden]
+    public void MarkSourceOwned() => sourceIsOwned = true;
+
+    private Material WritableSource()
+    {
+        if (Source == null) return null;
+        if (!sourceIsOwned)
+        {
+            Source = new Material(Source);
+            sourceIsOwned = true;
+        }
+        return Source;
     }
 
     [MoonSharpHidden]
@@ -41,7 +62,8 @@ public class LuaMaterial
 
     private void Apply(System.Action<Material> action)
     {
-        if (Source != null) action(Source);
+        var src = WritableSource();
+        if (src != null) action(src);
         for (int i = instances.Count - 1; i >= 0; i--)
         {
             var m = instances[i];
@@ -218,9 +240,8 @@ public static class MaterialProps
                 mat.SetInt(prop, value.Boolean ? 1 : 0);
                 break;
             case DataType.String:
-
-                mat.SetFloat(prop, (value.String ?? "").GetHashCode());
-                break;
+                throw new ScriptRuntimeException(
+                    $"Material.Set: property \"{prop}\" cannot be set from a string value");
             case DataType.UserData:
                 ApplyUserData(mat, prop, value.UserData.Object);
                 break;

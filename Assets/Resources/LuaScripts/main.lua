@@ -309,7 +309,7 @@ local function makeTarget(pos)
     -- part so it follows the target around and dies with it.
     local bb = Instance.new("BillboardGui", part)
     bb.Name = "HealthBar"
-    bb.Size = UDim2.fromOffset(160, 18)
+    bb.Size = UDim2.fromScale(3, 0.8)
     bb.Offset = Vector3.new(0, TARGET_SIZE.Y * 0.5 + 0.8, 0)
     bb.AlwaysOnTop = false
 
@@ -444,6 +444,17 @@ local function newPart(name, mat, shape, size, color, cf)
     return p
 end
 
+-- Source bullets: built once, parked far below the world so they're never
+-- on-camera. fireBullet() clones them — the engine's Clone path captures the
+-- source's GameObject as a one-shot template and Object.Instantiate's it,
+-- skipping CreatePrimitive + AddComponent on every shot.
+local PARKED = CFrame.new(Vector3.new(0, -10000, 0))
+local bulletSource = newPart("Bullet", neonMat, "Sphere", BULLET_SIZE,
+    Color3.fromRGB(255, 110, 30), PARKED)
+local trailSource = newPart("BulletTrail", trailMat, "Cube",
+    Vector3.new(TRAIL_THICKNESS, TRAIL_THICKNESS, TRAIL_LENGTH),
+    Color3.fromRGB(255, 130, 40), PARKED)
+
 local function fireBullet()
     -- Bullets leave the gun's muzzle and fly along the camera's sightline so
     -- aim still tracks the crosshair while the tracer reads as gun-fired.
@@ -451,16 +462,19 @@ local function fireBullet()
     local origin = gunMuzzlePos
     local cfYawPitch = CFrame.LookAt(origin, origin + fwd)
 
-    local head = newPart("Bullet", neonMat, "Sphere", BULLET_SIZE,
-        Color3.fromRGB(255, 110, 30), cfYawPitch)
+    -- Set CFrame *before* Parent so the clone's first ApplyTransform places
+    -- it at the muzzle, not at the parked source position.
+    local head = bulletSource:Clone()
+    head.CFrame = cfYawPitch
+    head.Parent = game
 
     -- Trail centered halfway behind the bullet, oriented so its local +Z
     -- (front of the gradient = brightest) faces the bullet.
     local trailCenter = origin - fwd * (TRAIL_LENGTH * 0.5)
     local trailCF = CFrame.LookAt(trailCenter, trailCenter + fwd)
-    local trail = newPart("BulletTrail", trailMat, "Cube",
-        Vector3.new(TRAIL_THICKNESS, TRAIL_THICKNESS, TRAIL_LENGTH),
-        Color3.fromRGB(255, 130, 40), trailCF)
+    local trail = trailSource:Clone()
+    trail.CFrame = trailCF
+    trail.Parent = game
 
     bullets[#bullets + 1] = {
         Part = head, Trail = trail,

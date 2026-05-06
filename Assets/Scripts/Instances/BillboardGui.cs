@@ -55,6 +55,10 @@ public class BillboardGui : GUIBase
 
         s.Canvas = go.AddComponent<Canvas>();
         s.Canvas.overrideSorting = true;
+        // Negative order pins every billboard strictly behind the root canvas's
+        // regular GUI content (which sits at sortingOrder 0). AlwaysOnTop now
+        // governs 3D occlusion (in the follower), not GUI-vs-billboard order.
+        s.Canvas.sortingOrder = -1;
         go.AddComponent<GraphicRaycaster>();
 
         s.Follower = go.AddComponent<BillboardFollower>();
@@ -102,21 +106,35 @@ public class BillboardGui : GUIBase
         s.Follower.Offset = new Vector3(s.Offset.X, s.Offset.Y, s.Offset.Z);
     }
 
+    // Reference pixels-per-stud the rect's sizeDelta is laid out at; the
+    // follower divides the live pixelsPerStud(distance) by this to drive
+    // localScale, so the rendered size tracks Size.Scale studs in the world.
+    private const float ReferencePPS = 100f;
+
     private static void ApplySize(LuaInstance instance, State s)
     {
         if (instance.UnityObject == null) return;
         var rt = (RectTransform)instance.UnityObject.transform;
 
-        var screen = new Vector2(Screen.width, Screen.height);
+        // Size.Scale is treated as world studs (perspective-scaled by the
+        // follower); Size.Offset is baked in alongside it and rides the same
+        // localScale, so it inherits the same distance falloff as Scale rather
+        // than staying at constant screen pixels — for fixed-pixel overlays
+        // use a regular ScreenGui, not a BillboardGui.
         rt.sizeDelta = new Vector2(
-            s.Size.X.Offset + s.Size.X.Scale * screen.x,
-            s.Size.Y.Offset + s.Size.Y.Scale * screen.y);
+            s.Size.X.Offset + s.Size.X.Scale * ReferencePPS,
+            s.Size.Y.Offset + s.Size.Y.Scale * ReferencePPS);
+
+        if (s.Follower != null) s.Follower.ReferencePPS = ReferencePPS;
     }
 
     private static void ApplyAlwaysOnTop(State s)
     {
-        if (s.Canvas == null) return;
-        s.Canvas.sortingOrder = s.AlwaysOnTop ? 32760 : 0;
+        // AlwaysOnTop now controls visibility against the 3D world (via the
+        // follower's per-frame occlusion check), not canvas sorting. The
+        // canvas's negative sortingOrder is set once in OnEnterScene and
+        // never changes, keeping every billboard strictly under regular GUI.
+        if (s.Follower != null) s.Follower.AlwaysOnTop = s.AlwaysOnTop;
     }
 
     private static void ApplyEnabled(LuaInstance instance, State s)
