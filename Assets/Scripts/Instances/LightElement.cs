@@ -1,5 +1,8 @@
 using MoonSharp.Interpreter;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 public abstract class LightElement : LuaInstanceClass
 {
@@ -17,6 +20,9 @@ public abstract class LightElement : LuaInstanceClass
         public bool RealTime = true;
         public float NearPlane = 0.2f;
         public float Strength = 1f;
+        // Pose override — applied after the per-frame ancestry reset so a
+        // directional light can be aimed (e.g. sun angled down from above).
+        public LuaVector3 Rotation = LuaVector3.Zero;
 
         public Light Unity;
         public GameObject Owner;
@@ -65,7 +71,9 @@ public abstract class LightElement : LuaInstanceClass
         s.Range = light.range;
         s.Brightness = 1f;
         s.Active = light.enabled;
+#if UNITY_EDITOR
         s.RealTime = light.lightmapBakeType == UnityEngine.LightmapBakeType.Realtime;
+#endif
         s.NearPlane = light.shadowNearPlane;
         s.Strength = light.shadowStrength;
         s.ShadowType = light.shadows == UnityEngine.LightShadows.Soft ? "Soft" : "Realistic";
@@ -76,8 +84,9 @@ public abstract class LightElement : LuaInstanceClass
 
         if (instance.UnityObject != null)
         {
+            var s = (LightState)instance.UserState;
             instance.UnityObject.transform.localPosition = UnityEngine.Vector3.zero;
-            instance.UnityObject.transform.localRotation = UnityEngine.Quaternion.identity;
+            instance.UnityObject.transform.localRotation = UnityEngine.Quaternion.Euler(s.Rotation.X, s.Rotation.Y, s.Rotation.Z);
         }
     }
 
@@ -109,6 +118,7 @@ public abstract class LightElement : LuaInstanceClass
             case "RealTime":   value = DynValue.NewBoolean(s.RealTime); return true;
             case "NearPlane":  value = DynValue.NewNumber(s.NearPlane); return true;
             case "Strength":   value = DynValue.NewNumber(s.Strength); return true;
+            case "Rotation":   value = UserData.Create(s.Rotation); return true;
         }
         value = DynValue.Nil;
         return false;
@@ -147,6 +157,15 @@ public abstract class LightElement : LuaInstanceClass
             case "Strength":
                 if (value.Type != DataType.Number) throw new ScriptRuntimeException("Light.Strength must be a number");
                 s.Strength = (float)value.Number; Apply(s); return true;
+            case "Rotation":
+                if (value.Type == DataType.UserData && value.UserData.Object is LuaVector3 r)
+                {
+                    s.Rotation = r;
+                    if (instance.UnityObject != null)
+                        instance.UnityObject.transform.localRotation = UnityEngine.Quaternion.Euler(r.X, r.Y, r.Z);
+                    return true;
+                }
+                throw new ScriptRuntimeException("Light.Rotation must be a Vector3 (Euler degrees)");
         }
         return false;
     }
@@ -160,7 +179,9 @@ public abstract class LightElement : LuaInstanceClass
         light.range = s.Range;
         light.enabled = s.Active;
         light.shadows = s.ShadowType == "Realistic" ? LightShadows.Hard : LightShadows.Soft;
+#if UNITY_EDITOR
         light.lightmapBakeType = s.RealTime ? LightmapBakeType.Realtime : LightmapBakeType.Baked;
+#endif
         if (s.RealTime)
         {
             light.shadowNearPlane = s.NearPlane;

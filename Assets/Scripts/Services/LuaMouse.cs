@@ -149,15 +149,17 @@ public class LuaMouse
         if (m == null) return;
 
         var pos = m.position.ReadValue();
+        // Read delta directly so mouse-look keeps working when the cursor is
+        // locked (in Locked mode position freezes but delta still reports motion).
+        var delta = m.delta.ReadValue();
 
         if (!positionInitialized)
         {
             lastPos = pos;
             positionInitialized = true;
         }
-        else if (pos != lastPos)
+        else if (delta.x != 0f || delta.y != 0f)
         {
-            var delta = pos - lastPos;
             lastPos = pos;
             moved.Fire(new LuaVector2(pos.x, pos.y), new LuaVector2(delta.x, delta.y));
         }

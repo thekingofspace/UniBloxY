@@ -19,6 +19,7 @@ public class BasePart : Shadable
             dst.Shape = src.Shape;
             dst.Color = src.Color;
             dst.Transparency = src.Transparency;
+            dst.Material = src.Material;
         }
     }
 
@@ -31,6 +32,14 @@ public class BasePart : Shadable
         public PartShape Shape = PartShape.Cube;
         public LuaColor3 Color = new LuaColor3(1f, 1f, 1f);
         public float Transparency = 0f;
+        public LuaMaterial Material;
+        // Tracks whether the materials are currently configured for alpha
+        // blending. -1 = unset (force first-time setup), 0 = opaque, 1 =
+        // transparent. EnableKeyword / DisableKeyword are expensive (shader
+        // variant resolution), so we only re-run the setup when the mode
+        // actually changes — letting per-frame transparency tweens just
+        // update the color without touching keywords.
+        public int BlendMode = -1;
     }
 
     public override void Initialize(LuaInstance instance)
@@ -76,6 +85,8 @@ public class BasePart : Shadable
                 value = UserData.Create(s.Color); return true;
             case "Transparency":
                 value = DynValue.NewNumber(s.Transparency); return true;
+            case "Material":
+                value = s.Material != null ? UserData.Create(s.Material) : DynValue.Nil; return true;
         }
         return base.TryGetProperty(instance, key, out value);
     }
@@ -132,9 +143,30 @@ public class BasePart : Shadable
                 s.Transparency = Mathf.Clamp01((float)value.Number);
                 ApplyColor(instance, s);
                 return true;
+            case "Material":
+                s.Material = ResolveMaterial(value);
+                if (instance.UnityObject != null)
+                {
+                    DestroyUnityObject(instance);
+                    SyncRender(instance, s);
+                }
+                return true;
         }
 
         return base.TrySetProperty(instance, key, value);
+    }
+
+    private static LuaMaterial ResolveMaterial(DynValue value)
+    {
+        if (value == null || value.IsNil()) return null;
+        if (value.Type == DataType.UserData && value.UserData.Object is LuaMaterial m) return m;
+        if (value.Type == DataType.String)
+        {
+            if (AssetService.Instance == null)
+                throw new ScriptRuntimeException("BasePart.Material: AssetService not available");
+            return AssetService.Instance.GetMaterial(value.String);
+        }
+        throw new ScriptRuntimeException("BasePart.Material must be a Material, name string, or nil");
     }
 
     protected override void OnRenderStateChanged(LuaInstance instance)
@@ -177,7 +209,14 @@ public class BasePart : Shadable
     protected virtual void OnUnityObjectCreated(LuaInstance instance, GameObject go)
     {
         var renderer = go.GetComponent<Renderer>();
-        if (renderer != null)
+        if (renderer == null) return;
+
+        var s = (State)instance.UserState;
+        if (s.Material != null && s.Material.Source != null)
+        {
+            renderer.sharedMaterial = s.Material.CreateInstance();
+        }
+        else
         {
             if (defaultShader == null)
                 defaultShader = Resources.Load<Shader>("Shaders/Default");
@@ -205,6 +244,10 @@ public class BasePart : Shadable
             Object.Destroy(instance.UnityObject);
             instance.UnityObject = null;
         }
+        // Fresh GameObject + materials on the next render — force the next
+        // ApplyColor to re-run the blend/keyword setup instead of trusting
+        // the cached flag from the destroyed renderer.
+        if (instance.UserState is State s) s.BlendMode = -1;
     }
 
     private static void ApplyTransform(LuaInstance instance, State s)
@@ -227,41 +270,54 @@ public class BasePart : Shadable
 
         var mats = renderer.sharedMaterials;
         var color = new Color(s.Color.R, s.Color.G, s.Color.B, 1f - s.Transparency);
+        int wantMode = s.Transparency > 0f ? 1 : 0;
+        bool modeChanged = wantMode != s.BlendMode;
+
         for (int i = 0; i < mats.Length; i++)
         {
-            if (mats[i] == null) continue;
-            if (mats[i].HasProperty("_Color")) mats[i].color = color;
-            if (mats[i].HasProperty("_BaseColor")) mats[i].SetColor("_BaseColor", color);
+            var m = mats[i];
+            if (m == null) continue;
 
-            if (s.Transparency > 0f)
+            // Color always updates — this is the hot path for fade tweens.
+            if (m.HasProperty("_Color")) m.color = color;
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
+
+            // Blend / keyword setup only runs when crossing the opaque ↔
+            // transparent boundary. EnableKeyword / DisableKeyword resolve
+            // shader variants and are too expensive to call every frame.
+            if (!modeChanged) continue;
+
+            if (wantMode == 1)
             {
-                mats[i].SetFloat("_Mode", 3f);
-                if (mats[i].HasProperty("_SrcBlend"))
-                    mats[i].SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-                if (mats[i].HasProperty("_DstBlend"))
-                    mats[i].SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-                if (mats[i].HasProperty("_ZWrite"))
-                    mats[i].SetInt("_ZWrite", 0);
-                mats[i].DisableKeyword("_ALPHATEST_ON");
-                mats[i].EnableKeyword("_ALPHABLEND_ON");
-                mats[i].DisableKeyword("_ALPHAPREMULTIPLY_ON");
-                mats[i].renderQueue = 3000;
+                m.SetFloat("_Mode", 3f);
+                if (m.HasProperty("_SrcBlend"))
+                    m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                if (m.HasProperty("_DstBlend"))
+                    m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                if (m.HasProperty("_ZWrite"))
+                    m.SetInt("_ZWrite", 0);
+                m.DisableKeyword("_ALPHATEST_ON");
+                m.EnableKeyword("_ALPHABLEND_ON");
+                m.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                m.renderQueue = 3000;
             }
             else
             {
-                mats[i].SetFloat("_Mode", 0f);
-                if (mats[i].HasProperty("_SrcBlend"))
-                    mats[i].SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
-                if (mats[i].HasProperty("_DstBlend"))
-                    mats[i].SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.Zero);
-                if (mats[i].HasProperty("_ZWrite"))
-                    mats[i].SetInt("_ZWrite", 1);
-                mats[i].DisableKeyword("_ALPHATEST_ON");
-                mats[i].DisableKeyword("_ALPHABLEND_ON");
-                mats[i].DisableKeyword("_ALPHAPREMULTIPLY_ON");
-                mats[i].renderQueue = -1;
+                m.SetFloat("_Mode", 0f);
+                if (m.HasProperty("_SrcBlend"))
+                    m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
+                if (m.HasProperty("_DstBlend"))
+                    m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.Zero);
+                if (m.HasProperty("_ZWrite"))
+                    m.SetInt("_ZWrite", 1);
+                m.DisableKeyword("_ALPHATEST_ON");
+                m.DisableKeyword("_ALPHABLEND_ON");
+                m.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                m.renderQueue = -1;
             }
         }
+
+        s.BlendMode = wantMode;
     }
 
     private static UnityEngine.PrimitiveType ShapeToPrimitive(PartShape shape)
@@ -313,6 +369,7 @@ public class BasePart : Shadable
 
     private static void PropagateMoveToDescendants(LuaInstance instance, LuaCFrame oldCF, LuaCFrame newCF)
     {
+        if (instance.Children.Count == 0) return;
         var delta = newCF * oldCF.Inverse();
         for (int i = 0; i < instance.Children.Count; i++)
             ApplyDeltaRecursive(instance.Children[i], delta);

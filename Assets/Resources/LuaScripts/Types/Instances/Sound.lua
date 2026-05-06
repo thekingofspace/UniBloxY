@@ -1,0 +1,31 @@
+---@meta
+
+---@class Sound : Instance
+---A sound emitter. Parent it to a BasePart for 3D positional playback;
+---parent it directly to game (or any non-part container) for 2D global playback.
+---@field ClassName "Sound"
+---@field SoundId Audio|string|nil The audio clip. Assigning a string loads from Resources/Sounds/<name> via AssetService.
+---@field Audio Audio|string|nil Alias of SoundId.
+---@field Volume number Linear gain (0+). Default 1.
+---@field Pitch number Playback pitch / speed multiplier. Default 1.
+---@field PlaybackSpeed number Alias of Pitch.
+---@field Loop boolean
+---@field Looped boolean Alias of Loop.
+---@field MinDistance number 3D rolloff inner radius (only when positional).
+---@field MaxDistance number 3D rolloff outer radius (only when positional).
+---@field RolloffMode "Logarithmic"|"Linear"|"Custom"
+---@field PlayOnCreate boolean If true, plays automatically once parented into the scene.
+---@field TimePosition number Current/seek position in seconds.
+---@field Length number Read-only — clip length in seconds.
+---@field Playing boolean Read/write — write toggles Play/Stop.
+---@field IsPositional boolean Read-only — true when an ancestor is a BasePart.
+---@field Play fun(self:Sound)
+---@field Stop fun(self:Sound)
+---@field Pause fun(self:Sound)
+---@field Resume fun(self:Sound)
+---@field SetMod fun(self:Sound, name:"distortion"|"echo"|"reverb"|"chorus"|"highpass"|"lowpass", value:number|string|table|nil) Adds or updates an audio filter. Number sets the primary parameter; table sets multiple named properties; nil removes the modifier.
+---@field RemoveMod fun(self:Sound, name:string)
+---@field GetMod fun(self:Sound, name:string):table|nil Returns a table of the filter's current scalar/enum properties, or nil if not set.
+---@field ClearMods fun(self:Sound)
+---@field Clone fun(self:Sound):Sound
+local Sound = {}

@@ -13,6 +13,7 @@ public class AssetService : LuaService
     private readonly Dictionary<string, LuaImage> imageCache = new();
     private readonly Dictionary<string, LuaFont> fontCache = new();
     private readonly Dictionary<string, LuaMesh> meshCache = new();
+    private readonly Dictionary<string, LuaAudio> audioCache = new();
 
     private Signal shaderLoadedSignal;
     private Signal assetLoadedSignal;
@@ -28,6 +29,7 @@ public class AssetService : LuaService
         UserData.RegisterType<LuaImage>();
         UserData.RegisterType<LuaFont>();
         UserData.RegisterType<LuaMesh>();
+        UserData.RegisterType<LuaAudio>();
 
         shaderLoadedSignal = new Signal(script, "AssetService.ShaderLoaded");
         assetLoadedSignal = new Signal(script, "AssetService.AssetLoaded");
@@ -165,6 +167,24 @@ public class AssetService : LuaService
         return wrapper;
     }
 
+    public LuaAudio GetSound(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+            throw new ScriptRuntimeException("AssetService:GetSound requires a sound name");
+
+        if (audioCache.TryGetValue(name, out var existing))
+            return existing;
+
+        var clip = Resources.Load<AudioClip>("Sounds/" + name);
+        if (clip == null)
+            throw new ScriptRuntimeException($"AssetService: sound \"{name}\" not found at Resources/Sounds/{name}");
+
+        var wrapper = new LuaAudio(name, clip);
+        audioCache[name] = wrapper;
+        assetLoadedSignal.Fire(name);
+        return wrapper;
+    }
+
     public LuaFont GetFont(string name)
     {
         if (string.IsNullOrEmpty(name))
@@ -195,6 +215,8 @@ public class AssetService : LuaService
         table["GetImage"] = (Func<string, LuaImage>)GetImage;
         table["GetFont"] = (Func<string, LuaFont>)GetFont;
         table["GetMesh"] = (Func<string, LuaMesh>)GetMesh;
+        table["GetSound"] = (Func<string, LuaAudio>)GetSound;
+        table["GetAudio"] = (Func<string, LuaAudio>)GetSound;
 
         table["CreateMaterial"] = DynValue.NewCallback((ctx, args) =>
         {
